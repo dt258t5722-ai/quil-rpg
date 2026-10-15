@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Quil">
+<meta name="theme-color" content="#0E0B0A">
+<title>Quil: The Goblin King's Tithe</title>
+<link rel="icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="app">
+  <section class="screen" id="screen-title">
+    <div class="title-art" id="title-art"></div>
+    <h1>Quil</h1>
+    <div class="cinzel" style="color:var(--ember);font-size:13px;margin-bottom:6px">The Goblin King's Tithe</div>
+    <div class="subtitle">Hollowmere burns. Take the hatchet. Go east.</div>
+    <div class="btn-stack">
+      <button class="btn primary" id="btn-continue">Continue</button>
+      <button class="btn" id="btn-new">New Game</button>
+      <button class="btn ghost" id="btn-load">Load</button>
+    </div>
+    <div class="dice-mode-row">Dice:
+      <select id="title-dice-mode"><option value="physical">Physical (tap pad)</option><option value="auto">Auto-roll</option></select>
+    </div>
+  </section>
+
+  <section class="screen" id="screen-new">
+    <div class="panel-header"><h2>New Game</h2><button class="btn small ghost" id="btn-new-back">Back</button></div>
+    <div class="panel">
+      <p>Quilliam Ashby, 19. Farmhand. No spells — ever. Distribute <strong>2 free points</strong>.</p>
+      <div class="points-left" id="points-left"></div>
+      <div class="stat-grid">
+        <div class="stat-row"><span class="name">Might</span><div class="stat-ctrl"><button id="dec-might">−</button><span class="val" id="stat-might"></span><button id="inc-might">+</button></div></div>
+        <div class="stat-row"><span class="name">Edge</span><div class="stat-ctrl"><button id="dec-edge">−</button><span class="val" id="stat-edge"></span><button id="inc-edge">+</button></div></div>
+        <div class="stat-row"><span class="name">Grit</span><div class="stat-ctrl"><button id="dec-grit">−</button><span class="val" id="stat-grit"></span><button id="inc-grit">+</button></div></div>
+        <div class="stat-row"><span class="name">Wits</span><div class="stat-ctrl"><button id="dec-wits">−</button><span class="val" id="stat-wits"></span><button id="inc-wits">+</button></div></div>
+        <div class="stat-row"><span class="name">Charm</span><div class="stat-ctrl"><button id="dec-charm">−</button><span class="val" id="stat-charm"></span><button id="inc-charm">+</button></div></div>
+      </div>
+      <div class="stat-row"><span class="name">Dice</span><select id="new-dice-mode"><option value="physical">Physical</option><option value="auto">Auto</option></select></div>
+      <div class="btn-stack" style="max-width:none;margin-top:16px"><button class="btn primary" id="btn-start-game">Begin the Prologue</button></div>
+    </div>
+  </section>
+
+  <section class="screen" id="screen-scene">
+    <div class="scene-art" id="scene-art"></div>
+    <div class="narrative parchment" id="narrative" style="margin:10px;border-radius:2px"></div>
+    <div class="choices" id="choices"></div>
+  </section>
+
+  <section class="screen" id="screen-brief">
+    <div class="scene-art" id="brief-art"></div>
+    <div class="panel" id="brief-body"></div>
+    <div class="choices">
+      <button class="btn primary" id="btn-brief-sneak">Approach the Square</button>
+      <button class="btn hidden" id="btn-brief-assault">Assault</button>
+      <button class="btn ghost" id="btn-brief-map">World Map</button>
+    </div>
+  </section>
+
+  <section class="screen" id="screen-combat">
+    <div class="scene-art" id="combat-scene-art" style="height:70px"></div>
+    <details class="tac-wrap" id="tac-wrap" open><summary><span class="cinzel">Battle map</span> <span class="tac-sum"></span></summary>
+      <div id="tac-map"></div><div id="tac-legend" class="tac-legend"></div></details>
+    <div class="combat-enemies" id="combat-enemies"></div>
+    <div class="combat-log" id="combat-log"></div>
+    <div class="combat-hero" id="combat-hero"></div>
+    <div class="action-wheel" id="action-wheel"></div>
+  </section>
+
+  <section class="screen" id="screen-loot">
+    <div class="scene-art" id="loot-art"></div>
+    <div class="panel parchment" id="loot-body" style="margin:10px"></div>
+    <div class="choices"><button class="btn primary" id="btn-loot-continue">Search the mill</button></div>
+  </section>
+
+  <section class="screen" id="screen-map">
+    <div class="panel-header"><h2>Vale of Embers</h2>
+      <div class="toggle-row" style="margin:0;gap:6px"><span style="font-size:12px">Auto</span><div class="toggle" id="auto-roll-toggle"></div></div></div>
+    <div class="map-root" id="map-root"></div>
+  </section>
+  <section class="screen" id="screen-pack"><div class="panel-header"><h2>Pack</h2></div><div class="panel" id="pack-root"></div></section>
+  <section class="screen" id="screen-hero"><div class="panel-header"><h2>Hero</h2></div>
+    <div class="panel" id="hero-root"><div class="hero-top"><div class="hero-portrait" id="hero-portrait"></div></div><div class="hero-stats-fill"></div></div></section>
+  <section class="screen" id="screen-hearth"><div class="panel-header"><h2>Hearth</h2></div><div class="panel" id="hearth-root"></div></section>
+  <section class="screen" id="screen-journal"><div class="panel-header"><h2>Journal</h2></div><div class="panel" id="journal-root"></div></section>
+
+  <section class="screen" id="screen-gallery"><div class="panel-header"><h2>Gallery</h2></div><div class="panel" id="gallery-root"></div></section>
+  <section class="screen" id="screen-complete"><div class="panel" id="complete-root"></div></section>
+  <section class="screen" id="screen-town">
+    <div class="scene-art town-art" id="town-art"></div>
+    <div class="town-head"><h2 class="cinzel" id="town-title"></h2><div id="town-chips"></div></div>
+    <div class="panel" id="town-body"></div>
+    <div class="choices"><button class="btn ghost" id="town-back">⟵ Leave town</button></div>
+  </section>
+
+  <nav id="bottom-nav">
+    <button data-screen="screen-map"><span class="ico">🗺</span>Map</button>
+    <button data-screen="screen-pack"><span class="ico">🎒</span>Pack</button>
+    <button data-screen="screen-hero"><span class="ico">🛡</span>Hero</button>
+    <button data-screen="screen-hearth"><span class="ico">🕯</span>Hearth</button>
+    <button data-screen="screen-journal"><span class="ico">📜</span>Journal</button>
+  </nav>
+
+  <div id="dice-pad"><div class="dice-sheet"></div></div>
+  <div class="fade-black" id="fade-black"></div>
+  <div id="toast"></div>
+</div>
+<script src="js/data.js"></script>
+<script src="js/dice.js"></script>
+<script src="js/save.js"></script>
+<script src="js/art.js"></script>
+<script src="js/narrate.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/game.js"></script>
+<script src="js/extras.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

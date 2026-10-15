@@ -1,0 +1,8 @@
+[build]
+  publish = "."
+  command = "echo no-build"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache"
