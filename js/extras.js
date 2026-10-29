@@ -20,6 +20,7 @@
     { cat: 'People', ids: ['char.quil', 'scene.quil_hatchet'], art: 'char.quil', cap: 'Quilliam "Quil" Ashby, nineteen, with his father\'s hatchet.' },
     { cat: 'People', ids: ['char.tamsin', 'scene.mill_loft'], art: 'char.tamsin', cap: 'Tamsin Reed, the miller\'s daughter, sharp-tongued and unbowed.' },
     { cat: 'People', ids: ['ally.pact'], art: 'ally.pact', cap: 'A pact sealed: Old Bram of the Hollowmere militia joins the hunt.' },
+    { cat: 'People', ids: ['char.ysolde'], art: 'char.ysolde', cap: 'Ysolde Fane, hedge-witch\'s apprentice, with a tongue like a nettle.' },
     { cat: 'People', ids: ['char.mawrot'], art: 'char.mawrot', cap: 'Mawrot, the Goblin King, one-eyed and patient.' },
     { cat: 'Places', ids: ['scene.title', 'scene.hollowmere_dusk', 'scene.farmhouse_fire', 'scene.town_square', 'scene.ashby_farm'], art: 'scene.title', cap: 'Hollowmere burning, the night of the Tithe.' },
     { cat: 'Places', ids: ['scene.mill'], art: 'scene.mill', cap: 'Hollowmere Mill, its wheel still turning.' },
@@ -27,6 +28,10 @@
     { cat: 'Places', ids: ['map.world'], art: 'map.world', cap: 'The Vale of Embers.' },
     { cat: 'Places', ids: ['place.inn'], art: 'place.inn', cap: 'The Crooked Mile inn at the King\'s Road Waypost.' },
     { cat: 'Places', ids: ['place.market'], art: 'place.market', cap: 'The waypost market at dusk.' },
+    { cat: 'Places', ids: ['scene.charcoal_track'], art: 'scene.charcoal_track', cap: 'The charcoal-burners\' track into Thornwood.' },
+    { cat: 'Places', ids: ['map.battle_m2'], art: 'map.battle_m2', cap: 'The goblin waystation: mounds, platforms, and the wolf pen.' },
+    { cat: 'Battle', ids: ['enemy.wolf_rider', 'enemy.wolf'], art: 'enemy.wolf_rider', cap: 'A Wolf-Rider of the Thornwood warband.' },
+    { cat: 'Battle', ids: ['battle.kill_wolfrider'], art: 'battle.kill_wolfrider', cap: 'The Wolf-Rider brought down.' },
     { cat: 'Battle', ids: ['enemy.goblin_cutter'], art: 'enemy.goblin_cutter', cap: 'Goblin Cutter: quick, cruel, and never alone.' },
     { cat: 'Battle', ids: ['enemy.goblin_archer'], art: 'enemy.goblin_archer', cap: 'Goblin Archer, perched where the arrows come from.' },
     { cat: 'Battle', ids: ['battle.kill_melee'], art: 'battle.kill_melee', cap: 'The hatchet does its work.' },
@@ -40,6 +45,9 @@
     { cat: 'Romance', ids: ['romance.rescue'], art: 'romance.rescue', cap: 'A hand offered on the mill-loft ladder.' },
     { cat: 'Romance', ids: ['romance.flirt'], art: 'romance.flirt', cap: 'Firelight, and her fingers on the cut on your cheek.' },
     { cat: 'Romance', ids: ['romance.kiss'], art: 'romance.kiss', cap: 'Moonlight in the hayloft.' },
+    { cat: 'Romance', ids: ['romance.y_rescue'], art: 'romance.y_rescue', cap: 'The padlock in the ash, and a hand to help her up.' },
+    { cat: 'Romance', ids: ['romance.y_flirt'], art: 'romance.y_flirt', cap: 'Yarrow and woundwort, and her fingers on your wrist.' },
+    { cat: 'Romance', ids: ['romance.y_kiss'], art: 'romance.y_kiss', cap: 'Under the Thornwood canopy.' },
   ];
   const CATS = ['People', 'Places', 'Battle', 'Romance'];
   function unlock(id) {
@@ -47,7 +55,7 @@
     ensure(s);
     G.forEach((g, i) => {
       if (g.ids.includes(id) && !s.gallery[g.art]) {
-        s.gallery[g.art] = { t: Date.now(), m: s.flags.mission1Done && s.flags.m1Stage === 'done' ? 'post1' : 'm1' };
+        s.gallery[g.art] = { t: Date.now(), m: s.flags.mission2Done ? 'post2' : s.flags.m2Stage ? 'm2' : s.flags.mission1Done && s.flags.m1Stage === 'done' ? 'post1' : 'm1' };
         QuilSave.save();
       }
     });
@@ -214,6 +222,7 @@
       ${bram ? `<p class="town-note">Old Bram nods at you from his corner, his pack already on his shoulder.</p>`
              : s.flags.bramTried ? `<p class="town-note">The grizzled veteran has gone back to his ale.</p>`
              : `<div class="shop-row"><div><b>The grizzled veteran</b><small>A one-eared militiaman nursing his ale. Recruit roll · Charm vs 6</small></div><button class="btn small" data-buy="bram">Talk</button></div>`}
+      ${s.flags.poultice ? `<p class="town-note">Ysolde has claimed the bench by the fire and is re-stoppering every potion you own with yarrow and woundwort, muttering about "apothecary swill".</p>` : ''}
       <div id="inn-out" class="town-out"></div>`, back);
     const out = t => { $('inn-out').innerHTML = t; refresh(); };
     $('town-body').querySelectorAll('[data-buy]').forEach(b => b.onclick = async () => {
@@ -299,36 +308,44 @@
       const opts = ['minor_potion', 'potion', 'bandage'].filter(k => s.items[k] > 0);
       const ov = document.createElement('div'); ov.className = 'item-ov';
       ov.innerHTML = `<div class="dice-sheet"><h3>Use an item</h3>
-        ${opts.map(k => `<button class="btn" data-k="${k}">${ITEM[k].icon} ${ITEM[k].name} ×${s.items[k]} · +${ITEM[k].heal} HP</button>`).join('') || '<p style="color:#9a8a70">Your pack holds nothing useful.</p>'}
+        ${opts.map(k => `<button class="btn" data-k="${k}">${ITEM[k].icon} ${ITEM[k].name} ×${s.items[k]} · +${ITEM[k].heal + poultice(k)} HP${poultice(k) ? ' 🌿' : ''}</button>`).join('') || '<p style="color:#9a8a70">Your pack holds nothing useful.</p>'}
         <button class="btn ghost" data-k="">Cancel</button></div>`;
       $('app').appendChild(ov);
       ov.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { ov.remove(); res(b.dataset.k || null); });
     });
   }
-  function useItem(k) { const s = S(); s.items[k]--; const n = heal(ITEM[k].heal); QuilSave.save(); return n; }
+  /* Ysolde's perk (Herbal Poultices): potions heal +3, bandages +2 */
+  const poultice = k => (S().flags.poultice ? (k === 'bandage' ? 2 : ITEM[k].heal ? 3 : 0) : 0);
+  function useItem(k) { const s = S(); s.items[k]--; const n = heal(ITEM[k].heal + poultice(k)); QuilSave.save(); return n; }
 
   /* ---------- Mission complete ---------- */
-  function missionComplete() {
+  function missionComplete(n) {
     QuilGame.showScreen('screen-complete');
     const s = S();
-    const imgs = unlockedList(u => u.m === 'm1');
-    const t = s.romance.tamsin;
+    const m2 = n === 2;
+    const imgs = unlockedList(u => u.m === (m2 ? 'm2' : 'm1'));
+    const t = s.romance.tamsin, y = s.romance.ysolde;
+    const banner = m2 ? 'scene.charcoal_track' : 'scene.road_east';
+    const nextM2 = !m2 && !s.flags.mission2Done;
     $('complete-root').innerHTML = `
-      <div class="art-banner tall" data-art="scene.road_east"><div class="shade"></div>
-        <div class="cap"><span class="cinzel" style="font-size:22px">Mission Complete</span><small>M1 · Ashes of Hollowmere</small></div></div>
-      <p class="beat-narr">Hollowmere is ash and your father is in the ground, but the trail is fresh. Wagons, east, into Thornwood.</p>
+      <div class="art-banner tall" data-art="${banner}"><div class="shade"></div>
+        <div class="cap"><span class="cinzel" style="font-size:22px">Mission Complete</span><small>${m2 ? 'M2 · The Charcoal Track' : 'M1 · Ashes of Hollowmere'}</small></div></div>
+      <p class="beat-narr">${m2 ? 'The rear guard is ash among the ash. Three sets of wagon ruts lead away from the waystation, east, to the coast, and up toward the mountains, and somewhere ahead, in one of them, is Wren.'
+        : 'Hollowmere is ash and your father is in the ground, but the trail is fresh. Wagons, east, into Thornwood.'}</p>
       <div class="purse">${goldChip()} ${hpChip()} <span class="tag">Lv ${s.hero.level}</span>
-        ${t ? `<span class="tag">Tamsin · ${t.status} (${t.affection})</span>` : ''}${s.allies.map(a => `<span class="tag">${a.name}</span>`).join('')}</div>
+        ${t ? `<span class="tag">Tamsin · ${t.status} (${t.affection})</span>` : ''}${y ? `<span class="tag">Ysolde · ${y.status} (${y.affection})</span>` : ''}${s.allies.map(a => `<span class="tag">${a.name}</span>`).join('')}</div>
       <h3 class="cinzel gal-h">Images unlocked (${imgs.length})</h3>
       <div class="gal-grid">${imgs.map((g, i) => `<button class="gal-th" data-gi="${i}" data-art="${g.art}"></button>`).join('')}</div>
       <div class="choices" style="padding:14px 0">
-        <button class="btn primary" id="mc-town">Go to town · King's Road Waypost</button>
+        ${nextM2 ? `<button class="btn primary" id="mc-m2">▶ Start Mission 2 · The Charcoal Track</button>` : ''}
+        <button class="btn ${nextM2 ? '' : 'primary'}" id="mc-town">${m2 ? 'Return to town · The Crooked Mile' : 'Go to town · King\'s Road Waypost'}</button>
         <button class="btn" id="mc-gallery">Open Gallery</button>
         <button class="btn ghost" id="mc-map">World Map</button></div>`;
     $('complete-root').querySelectorAll('.gal-th').forEach(el => { el.appendChild(QuilArt.placeholderEl(el.dataset.art)); el.onclick = () => openViewer(imgs, +el.dataset.gi); });
-    QuilArt.mount($('complete-root').querySelector('.art-banner'), 'scene.road_east');
-    $('mc-town').onclick = showTown; $('mc-gallery').onclick = showGallery; $('mc-map').onclick = QuilGame.showMap;
+    QuilArt.mount($('complete-root').querySelector('.art-banner'), banner);
+    if ($('mc-m2')) $('mc-m2').onclick = () => QuilM2.start();
+    $('mc-town').onclick = m2 ? inn : showTown; $('mc-gallery').onclick = showGallery; $('mc-map').onclick = QuilGame.showMap;
   }
 
-  window.QuilExtras = { cine, unlock, showGallery, openViewer, showTown, campRest, pickItem, useItem, missionComplete, PRICES, ITEM, ensure, goldChip };
+  window.QuilExtras = { inn, cine, unlock, showGallery, openViewer, showTown, campRest, pickItem, useItem, missionComplete, PRICES, ITEM, ensure, goldChip };
 })();

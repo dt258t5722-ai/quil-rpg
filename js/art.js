@@ -25,6 +25,8 @@ window.QuilArt = (() => {
     'scene.road_east': { label: 'Road east', emoji: '🛤️', hue: 30 },
     'scene.mill_loft': { label: 'Mill loft', emoji: '🏚️', hue: 40 },
     'scene.town_square': { label: 'Burning square', emoji: '🔥', hue: 8 },
+    'char.ysolde': { label: 'Ysolde Fane', emoji: '🌿', hue: 110 },
+    'enemy.wolf_rider': { label: 'Wolf-Rider', emoji: '🐺', hue: 60 },
     'scene.fade_romance': { label: 'Firelight', emoji: '🕯️', hue: 18 },
   };
 
@@ -66,6 +68,15 @@ window.QuilArt = (() => {
     'ally.pact': [A+'ally_pact.webp', '55% 40%'],
     'place.inn': [A+'inn.webp', '50% 50%'],
     'place.market': [A+'market.webp', '50% 50%'],
+    'scene.charcoal_track': [A+'charcoal_track.webp', '50% 50%'],
+    'map.battle_m2': [A+'battlemap_m2.webp', '50% 50%'],
+    'enemy.wolf_rider': [A+'wolf_rider.webp', '50% 35%'],
+    'enemy.wolf': [A+'wolf_rider.webp', '50% 60%'],
+    'battle.kill_wolfrider': [A+'kill_wolfrider.webp', '50% 40%'],
+    'char.ysolde': [A+'ysolde.webp', '50% 25%'],
+    'romance.y_rescue': [A+'ysolde_rescue.webp', '45% 40%'],
+    'romance.y_flirt': [A+'ysolde_flirt.webp', '50% 35%'],
+    'romance.y_kiss': [A+'ysolde_kiss.webp', '50% 40%'],
   };
   function file(entityId) { return FILES[entityId] || null; }
 

@@ -8,6 +8,8 @@ window.QuilData = {
     short_sword: { id: 'short_sword', name: 'Short Sword', type: 'melee', dmg: [4, 9], base: 3, scale: 1.0, acc: 1 },
     spear: { id: 'spear', name: 'Spear', type: 'melee', dmg: [5, 10], base: 4, scale: 1.0, acc: 1, notes: 'Reach' },
     skinning_knife: { id: 'skinning_knife', name: 'Skinning Knife', type: 'melee', dmg: [2, 6], base: 2, scale: 0.5, acc: 1, notes: '+4 damage on takedowns' },
+    woodsman_axe: { id: 'woodsman_axe', name: "Woodsman's Axe", type: 'melee', dmg: [6, 11], base: 4, scale: 1.0, acc: 1, notes: 'Heavy bearded axe, Thornwood steel' },
+    wolf_fangs: { id: 'wolf_fangs', name: 'Wolf Fangs', type: 'melee', dmg: [2, 5], base: 2, scale: 0.5, acc: 0, enemy: true, noGrab: true },
     goblin_shiv: { id: 'goblin_shiv', name: 'Goblin Shiv', type: 'melee', dmg: [2, 6], base: 2, scale: 0.5, acc: 2, durability: 3, enemy: true },
     goblin_shortbow: { id: 'goblin_shortbow', name: 'Goblin Shortbow', type: 'bow', dmg: [2, 6], base: 2, scale: 0.5, acc: 0, durability: 2, enemy: true },
   },
@@ -37,6 +39,16 @@ window.QuilData = {
       hp: 16, guard: 5, attack: 6, dmg: 4, traits: ['horn'], percep: -2, // strong, slow-witted
       weapon: 'goblin_shiv', resolve: 6, emoji: '🪓'
     },
+    wolf_rider: {
+      id: 'wolf_rider', name: 'Wolf-Rider', artId: 'enemy.wolf_rider',
+      hp: 20, guard: 6, attack: 7, dmg: 5, traits: ['fast', 'charge', 'nose', 'mounted'], percep: 0, // +2 keen nose within 3 squares
+      weapon: 'spear', resolve: 7, emoji: '🐺', token: 'wolfrider', speed: 2
+    },
+    wolf: {
+      id: 'wolf', name: 'Grey Wolf', artId: 'enemy.wolf',
+      hp: 10, guard: 5, attack: 6, dmg: 3, traits: ['fast', 'nose', 'beast'], percep: 0,
+      weapon: null, resolve: 99, emoji: '🐺', token: 'wolfrider', speed: 2
+    },
   },
 
   damsel: {
@@ -45,6 +57,13 @@ window.QuilData = {
       brief: "Freckled miller's daughter, sharp-tongued, Quil's childhood friend.",
       likes: 'Honesty, home', dislikes: 'Cruelty',
       tolerance: 'Low', heart: 5, emoji: '👩'
+    },
+    ysolde: {
+      id: 'ysolde', name: 'Ysolde Fane', artId: 'char.ysolde',
+      brief: "A hedge-witch's apprentice from the Thornwood fringe: copper braids, herb-stained fingers, a tongue like a nettle.",
+      likes: 'Cleverness, herbs', dislikes: 'Boasting',
+      tolerance: 'Medium', heart: 6, emoji: '🌿',
+      perk: { id: 'poultice', name: 'Herbal Poultices', text: 'Potions heal +3, bandages +2 (Ysolde re-brews them with yarrow and woundwort).' }
     }
   },
 
@@ -62,7 +81,7 @@ window.QuilData = {
     {
       id: 'thornwood', name: 'Thornwood',
       locs: [
-        { id: 'm2', name: 'M2 · The Charcoal Track', kind: 'mission', desc: 'Locked', unlocked: false, mission: 2 },
+        { id: 'm2', name: 'M2 · The Charcoal Track', kind: 'mission', desc: 'Ambush the rear guard', unlocked: false, mission: 2 },
         { id: 'm3', name: 'M3 · Old Toll\'s Bridge', kind: 'mission', desc: 'Locked', unlocked: false, mission: 3 },
         { id: 's1', name: 'S1 · Elder Oak', kind: 'side', desc: 'Locked', unlocked: false },
       ]
@@ -103,6 +122,51 @@ window.QuilData = {
       ]
     },
   ],
+
+  mission2: {
+    id: 2,
+    name: 'The Charcoal Track',
+    location: 'A goblin waystation on the charcoal-burners\' track, Thornwood',
+    objective: 'Ambush the raiders\' rear guard at the waystation.',
+    enemies: [
+      { type: 'goblin_cutter', id: 'gc1' }, { type: 'goblin_cutter', id: 'gc2' }, { type: 'goblin_cutter', id: 'gc3' },
+      { type: 'goblin_cutter', id: 'gc4' }, { type: 'goblin_cutter', id: 'gc5' },
+      { type: 'goblin_archer', id: 'ga1' }, { type: 'goblin_archer', id: 'ga2' },
+      { type: 'wolf_rider', id: 'wr1' },
+    ],
+    alertness: 6,
+    map: {
+      // 9×6 grid over battlemap_m2 (1024×576)
+      cols: 9, rows: 6, art: 'assets/art/battlemap_m2.webp', title: 'The Charcoal Track Waystation', ground: 'Packed earth & ash', smoke: 2,
+      quil: [2, 5], quilCover: [1, 5],
+      terrain: [
+        { type: 'building', label: 'Hide tent (north-west)', cells: [[1, 1], [2, 0], [2, 1]] },
+        { type: 'building', label: 'Hide tent (north-east)', cells: [[6, 0], [6, 1], [7, 1]] },
+        { type: 'building', label: 'Hide tent (west)', cells: [[1, 3], [1, 4]] },
+        { type: 'building', label: 'Lean-to (east)', cells: [[7, 3]] },
+        { type: 'building', label: 'The hollow stump', cells: [[5, 3]], stump: true },
+        { type: 'building', label: 'The wolf pen', cells: [[6, 3]] },
+        { type: 'mound', label: 'Charcoal mound', cells: [[4, 0], [2, 2], [5, 2], [3, 4], [4, 4]] },
+        { type: 'fire', label: 'The campfire', cells: [[4, 2]] },
+        { type: 'beam', label: 'Watch platform (north)', cells: [[3, 1]] },
+        { type: 'beam', label: 'Watch platform (south)', cells: [[5, 4]] },
+        { type: 'cover', label: 'Forest edge', cells: [[0, 0], [0, 1], [0, 2], [8, 0], [8, 1], [8, 4], [8, 5], [0, 5], [1, 5]] },
+        { type: 'cover', label: 'Tumbled stones', cells: [[3, 5]] },
+        { type: 'cover', label: 'Split-rail fence', cells: [[6, 2]] },
+      ],
+      pos: { gc1: [2, 3, 'S'], gc2: [5, 1, 'W'], gc3: [3, 3, 'E'], gc4: [7, 2, 'W'], gc5: [6, 5, 'W'], ga1: [3, 1, 'S'], ga2: [5, 4, 'W'], wr1: [6, 4, 'W'] },
+      patrol: { gc1: [[2, 3], [2, 4]], gc2: [[5, 1], [4, 1]], gc3: [[3, 3], [4, 3]], gc4: [[7, 2], [8, 2]], gc5: [[6, 5], [5, 5]], wr1: [[6, 4], [7, 4], [7, 5]] },
+    },
+    loot: { gold: 30, jewels: { garnet: 2 }, items: ['woodsman_axe'], arrows: { broadhead: 20 } },
+    cache: { gold: 20, items: ['potion'], arrows: { barbed: 4 } },
+    rescue: 'ysolde',
+    intel: [
+      { type: 'Captive', text: 'Three wagons left the waystation: one east, one to the coast, one into the mountains. The red-haired girl rides east.' },
+      { type: 'Loot', text: 'The rear guard hid its takings under the hollow stump by the wolf pen.' },
+      { type: 'Route', text: 'The goblins whisper of the Elder Oak: something old and green that the warband fears.' },
+    ],
+    xp: 160,
+  },
 
   mission1: {
     id: 1,

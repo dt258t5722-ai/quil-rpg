@@ -31,13 +31,14 @@ window.QuilGame = (() => {
   /* ---- Way back: every hub screen gets a Resume button ---- */
   function m1Stage(s) {
     if (!s.flags.prologueDone) return 'prologue';
+    if (s.flags.mission1Done && s.flags.m2Stage && !s.flags.mission2Done) return 'm2';
     if (s.flags.mission1Done) return 'done';
     return s.flags.m1Stage || 'brief';
   }
   function resumeLabel() {
     const s = QuilSave.get(); if (!s) return 'Resume';
     return ({ prologue: 'Resume Prologue', brief: 'Resume Mission 1', combat: 'Resume Mission 1',
-      loot: 'Resume: Loot', rescue: 'Resume: Mill Loft', done: 'M2 teaser' })[m1Stage(s)];
+      loot: 'Resume: Loot', rescue: 'Resume: Mill Loft', done: s.flags.mission2Done ? 'Town' : 'Start Mission 2', m2: 'Resume Mission 2' })[m1Stage(s)];
   }
   function resumeCurrent() {
     const s = QuilSave.get(); if (!s) return initTitle();
@@ -45,13 +46,15 @@ window.QuilGame = (() => {
     if (st === 'prologue') { prologueIdx = s.flags.prologueIdx || 0; showScreen('screen-scene'); renderPrologue(); }
     else if (st === 'loot') afterCombatVictory();
     else if (st === 'rescue') startRescue();
-    else if (st === 'done') showSliceEnd();
+    else if (st === 'm2') QuilM2.resume();
+    else if (st === 'done') s.flags.mission2Done ? QuilExtras.showTown() : QuilM2.start();
     else showMissionBrief();
   }
+  const s2done = () => !!QuilSave.get().flags.mission2Done;
   function renderResumeBar(id) {
     const header = document.querySelector('#' + id + ' .panel-header');
     if (!header) return;
-    if (id === 'screen-gallery' || (m1Stage(QuilSave.get()) === 'done' && id === 'screen-map')) { header.querySelectorAll('.btn-resume').forEach(x => x.remove()); return; }
+    if (id === 'screen-gallery' || (m1Stage(QuilSave.get()) === 'done' && s2done() && id === 'screen-map')) { header.querySelectorAll('.btn-resume').forEach(x => x.remove()); return; }
     let b = header.querySelector('#btn-resume');
     if (!b) {
       header.querySelectorAll('.btn-resume').forEach(x => x.remove());
@@ -504,8 +507,9 @@ window.QuilGame = (() => {
         '<button class="btn" id="btn-replay-m1">Replay Mission 1</button>');
       $('btn-replay-m1').onclick = replayMission1;
     };
-    if (loc.id === 'm2') return showSliceEnd;
+    if (loc.id === 'm2') return () => QuilM2.fromMap();
     if (loc.id === 'waypost') return QuilExtras.showTown;
+    if (loc.id === 's1') return () => showPlace('scene.camp', '<p><strong>S1 · The Elder Oak</strong></p><p>The goblins whisper of it: something old and green deep in Thornwood that even the warband fears. A rumour, for now, and a road for another day.</p><p><em>Side quest coming in a later build.</em></p>');
     if (placeText[loc.id]) return () => showPlace(...placeText[loc.id]);
     return () => toast(loc.name);
   }
@@ -621,7 +625,7 @@ window.QuilGame = (() => {
         <div class="cinzel" style="font-size:12px;color:#a07070">Corruption · ${h.corruption}/100</div>
         <div class="bar"><i style="width:${h.corruption}%"></i></div>
       </div>
-      <p style="font-size:13px;color:#8a7a60">Feats unlock at levels 3, 6, 9, 12, 15. Vertical slice ends at Mission 1.</p>`;
+      <p style="font-size:13px;color:#8a7a60">Feats unlock at levels 3, 6, 9, 12, 15. Missions 1–2 playable.</p>`;
   }
 
   function showHearth() {
@@ -643,11 +647,25 @@ window.QuilGame = (() => {
         </div>
       </div>`;
     }
+    const y = s.romance.ysolde;
+    if (y) {
+      const yh = Math.min(5, Math.ceil(y.affection / 20));
+      html += `<div class="damsel-card">
+        <div class="hero-portrait" id="ysolde-art" style="width:64px;height:64px"></div>
+        <div>
+          <div class="cinzel" style="color:var(--gold)">Ysolde Fane</div>
+          <div class="hearts">${'♥'.repeat(yh)}${'♡'.repeat(5-yh)} · Aff ${y.affection}</div>
+          <div style="font-size:13px;color:#9a8a70">${y.status} · ${y.location}</div>
+          <div style="font-size:13px;margin-top:4px">Likes cleverness & herbs · Dislikes boasting · Heart 6${s.flags.poultice ? ' · Perk: Herbal Poultices (potions +3, bandages +2)' : ''}</div>
+        </div>
+      </div>`;
+    }
     html += `<h3 class="cinzel" style="color:var(--gold);font-size:14px;margin-top:16px">Family</h3>
       <p style="color:#8a7a60;font-size:14px">Maren, Wren and Elsie are on the Tithe road. Their captivity is implied only — find the acorn marks. Elsie awaits M5; Wren M10; Maren M20.</p>`;
     $('hearth-root').innerHTML = html;
     mountThumbs($('hearth-root'));
     if (t) QuilArt.mount($('tamsin-art'), 'char.tamsin');
+    if (y) QuilArt.mount($('ysolde-art'), 'char.ysolde');
   }
 
   function showJournal() {
@@ -659,7 +677,7 @@ window.QuilGame = (() => {
         <div class="cap"><span class="cinzel">Mawrot, the Goblin King</span><small>He took the eye of Sir Tomas's blade. He wants the son.</small></div></div>
       <button class="btn primary gal-open" id="btn-gallery" style="width:100%;margin-bottom:12px">🖼 Gallery · ${Object.keys(s.gallery || {}).length} images unlocked</button>
       <h3 class="cinzel" style="color:var(--gold);font-size:14px">Mission Log</h3>
-      <p>${s.flags.prologueDone ? '✓ Prologue' : '○ Prologue'} · ${s.flags.mission1Done ? '✓ M1 Ashes of Hollowmere' : '○ M1 Ashes of Hollowmere'}</p>
+      <p>${s.flags.prologueDone ? '✓ Prologue' : '○ Prologue'} · ${s.flags.mission1Done ? '✓ M1 Ashes of Hollowmere' : '○ M1 Ashes of Hollowmere'} · ${s.flags.mission2Done ? '✓' : '○'} M2 The Charcoal Track</p>
       <h3 class="cinzel" style="color:var(--gold);font-size:14px;margin-top:14px">Intel</h3>
       <div class="intel-cards">${(s.intel||[]).map(i=>`<span class="intel-card ${i.false?'':''}">[${i.type}] ${i.text}</span>`).join('') || '<span style="color:#8a7a60">None</span>'}</div>
       <h3 class="cinzel" style="color:var(--gold);font-size:14px;margin-top:14px">Roll Log</h3>
@@ -677,6 +695,7 @@ window.QuilGame = (() => {
     if (s.flags.mission1Done && !s.mapUnlocks.includes('m2')) { s.mapUnlocks.push('m2'); QuilSave.save(); }
     if (s.flags.mission1Done && !s.mapUnlocks.includes('waypost')) { s.mapUnlocks.push('waypost'); QuilSave.save(); }
     if (!s.flags.prologueDone && !s.flags.prologueIdx) startPrologue();
+    else if (s.flags.mission1Done && s.flags.m2Stage && !s.flags.mission2Done) QuilM2.resume();
     else if (s.flags.mission1Done) showMap();
     else resumeCurrent();
   }
@@ -709,8 +728,9 @@ window.QuilGame = (() => {
   function boot() {
     bindNav();
     QuilSave.load();
+    if (/[?&]dev=m2\b/.test(location.search) && window.QuilM2) return QuilM2.devJump();
     initTitle();
   }
 
-  return { boot, resumeCurrent, toast, showScreen, showMap, showPack, showHero, showHearth, showJournal, resume };
+  return { beat, witsRoll, witsCard, checkLevel, mountThumbs, showPlace, initTitle, boot, resumeCurrent, toast, showScreen, showMap, showPack, showHero, showHearth, showJournal, resume };
 })();

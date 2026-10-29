@@ -237,6 +237,64 @@ window.QuilNarrate = (() => {
     // sentence-case: capitalise the start and after . ! ?
     return out.replace(/(^|[.!?]\s+)([a-z])/g, (_, a, c) => a + c.toUpperCase());
   }
+  /* ---- Mission 2: The Charcoal Track ---- */
+  Object.assign(P, {
+    intro_m2: [
+      "The waystation squats in a clearing of grey ash. Charcoal mounds smoulder like sleeping beasts, a fire spits in the middle, and goblins idle on the watch platforms. Something big and grey shifts in the pen by the hollow stump.",
+      "Smoke from the charcoal mounds hangs low in the clearing. Eight of them, by your count, and one of them rides a wolf the size of a pony. None of them are looking at the treeline.",
+    ],
+    sneak_begin_m2: [
+      "You slide out of the bracken on your belly, using the charcoal mounds' smoke the way your father used morning mist on the deer.",
+      "Ash muffles every step. You move from mound to mound, breathing through your teeth, the heat of the smoulder on your face.",
+    ],
+    assault_m2: [
+      "You stand up out of the treeline with the bow already bent. \"Hollowmere sends its regards.\" The first arrow is loosed before the last word.",
+      "No more crawling through ash. You step into the clearing, loose, and the waystation erupts in shrieks, and the wolf in the pen begins to howl.",
+    ],
+    wolf_sniff: [
+      "{e} lifts its muzzle and drinks the air in long, wet snuffles. Its lips peel back. It has your scent.",
+      "{e} goes still, nose working, then swings its head straight toward your hiding place.",
+    ],
+    wr_close: [
+      "{e} lopes across the ash in great bounding strides, faster than anything on two legs has a right to be.",
+      "{e} comes on low and quick, a grey shape weaving between the mounds.",
+    ],
+    wolf_close: [
+      "The wolf circles wide, belly to the ash, yellow eyes never leaving your throat.",
+      "{e} pads closer, hackles high, a growl rolling out of it like distant thunder.",
+    ],
+    wr_charge: [
+      "{e} kicks its wolf into a flat-out charge. The ground shudders, ash sprays, and the spear-point comes at your chest behind four hundred pounds of fur and teeth.",
+      "With a shriek of glee {e} drives its mount straight at you. The wolf's jaws gape, the goblin's spear drops level, and there is nowhere to go but through it.",
+    ],
+    wr_unhorse: [
+      "Your blow tears {e} half out of the saddle. It spills into the ash with a squeal, and the wolf, freed of its weight, wheels on you with its own murderous intent.",
+      "{e} howls and topples from the wolf's back, clutching its wound. The beast shakes off the dangling reins and turns its yellow eyes on you alone.",
+    ],
+    wr_rider_down: [
+      "{e} slides dead from the saddle. The wolf stands over the corpse a heartbeat, sniffs it, then lifts its bloody muzzle toward you. It is not done.",
+      "The rider falls, but the mount doesn't flee. The great grey wolf steps over what's left of {e} and lowers its head, growling.",
+    ],
+    wr_key: [
+      "An iron key on a greasy thong swings from {e}'s belt. That will open the wolf pen.",
+    ],
+    def_ok_beast: [
+      "Jaws snap shut a finger's width from your face. You shove the {w} aside and roll clear, stinking of wet dog.",
+      "You meet the lunge with your shoulder and the {w} skids off your arm. It circles, slavering.",
+    ],
+    def_graze_beast: [
+      "The {w} rake your forearm, tearing sleeve and skin. Warm blood runs into your palm.",
+      "{e} catches your calf with the {w} and wrenches before you rip free. You stagger, bleeding.",
+    ],
+    def_hit_beast: [
+      "{e} slams into you and the {w} tear deep into your shoulder. For a moment there is only hot breath, teeth and the grinding of bone.",
+      "The {w} take you in the thigh and {e} shakes you like a rat. You hammer at it until it lets go, leaving a ragged, pumping wound.",
+    ],
+    m2_victory: [
+      "The last of the rear guard lies in the ash. The charcoal mounds tick and hiss. From behind the wolf pen, a woman's voice says, \"Well. That was loud.\"",
+    ],
+  });
+
   function pick(key, ctx) {
     const pool = P[key];
     if (!pool || !pool.length) return '';

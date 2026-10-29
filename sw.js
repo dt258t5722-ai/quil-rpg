@@ -1,5 +1,18 @@
-const CACHE = 'quil-v9';
+const CACHE = 'quil-v10';
 const ASSETS = [
+  './js/mission2.js',
+  './assets/art/charcoal_track.webp',
+  './assets/art/battlemap_m2.webp',
+  './assets/art/wolf_rider.webp',
+  './assets/art/kill_wolfrider.webp',
+  './assets/art/ysolde.webp',
+  './assets/art/ysolde_rescue.webp',
+  './assets/art/ysolde_flirt.webp',
+  './assets/art/ysolde_kiss.webp',
+  './assets/art/tokens/wolfrider.webp',
+  './assets/art/tokens/archer2.webp',
+  './assets/art/tokens/cutter2.webp',
+
   './',
   './index.html',
   './manifest.json',

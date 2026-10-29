@@ -5,14 +5,14 @@ window.QuilCombat = (() => {
 
   function toast(msg) { window.QuilGame?.toast(msg); }
 
-  function spawnMission1() {
-    const m = QuilData.mission1;
-    const enemies = m.enemies.map((e, i) => {
+  let MID = 1;
+  const MIS = () => QuilData['mission' + MID];
+  function mkEnemy(e, i, m) {
       const proto = QuilData.enemies[e.type];
       return {
         uid: e.id,
         type: e.type,
-        name: proto.name + (e.type === 'goblin_cutter' ? ` ${i + 1}` : ''), horn: proto.traits.includes('horn'), percep: proto.percep || 0,
+        name: proto.name + (e.type === 'goblin_cutter' ? ` ${i + 1}` : MID === 2 && e.type === 'goblin_archer' ? ` ${i - 4}` : ''), horn: proto.traits.includes('horn'), percep: proto.percep || 0,
         artId: proto.artId,
         emoji: proto.emoji,
         hp: proto.hp, maxHp: proto.hp,
@@ -24,15 +24,20 @@ window.QuilCombat = (() => {
         dead: false, ko: false,
         engaged: false,
         ranged: proto.traits.includes('ranged'),
-        pos: m.map.pos[e.id].slice(0, 2), facing: m.map.pos[e.id][2], aware: 'unaware', unseen: false,
+        pos: (m.map.pos[e.id] || [0, 0]).slice(0, 2), facing: (m.map.pos[e.id] || [])[2] || 'W', aware: 'unaware', unseen: false,
         patrol: (m.map.patrol || {})[e.id] || null, pi: 0, pdir: 1,
+        fast: proto.traits.includes('fast'), nose: proto.traits.includes('nose'), charge: proto.traits.includes('charge'), mounted: proto.traits.includes('mounted'), beast: proto.traits.includes('beast'), token: proto.token || null,
       };
-    });
-    const prep = (QuilSave.get().flags.m1Prep || {});
-    if (prep.tracks === false) enemies.filter(e => e.ranged).forEach(e => { e.unseen = true; });
-    if (prep.trap === 'sprung') enemies.filter(e => ['gc1', 'gc2'].includes(e.uid)).forEach(e => { e.aware = 'suspicious'; e.facing = 'S'; });
+  }
+  function spawnMission(id) {
+    MID = id || 1;
+    const m = MIS();
+    const enemies = m.enemies.map((e, i) => mkEnemy(e, i, m));
+    const prep = (QuilSave.get().flags[MID === 2 ? 'm2Prep' : 'm1Prep'] || {});
+    if (MID === 1 && prep.tracks === false) enemies.filter(e => e.ranged).forEach(e => { e.unseen = true; });
+    if (MID === 1 && prep.trap === 'sprung') enemies.filter(e => ['gc1', 'gc2'].includes(e.uid)).forEach(e => { e.aware = 'suspicious'; e.facing = 'S'; });
     return {
-      missionId: 1,
+      missionId: MID,
       round: 1,
       phase: 'approach', // approach | player | enemy | over
       approach: null,
@@ -45,7 +50,7 @@ window.QuilCombat = (() => {
       alerted: false,
       captives: [],
       done: false,
-      quil: ((QuilSave.get().flags.m1Prep || {}).tracks ? m.map.quilCover : m.map.quil).slice(),
+      quil: ((MID === 1 ? prep.tracks : prep.trap === 'spotted') ? m.map.quilCover : m.map.quil).slice(),
     };
   }
 
@@ -57,11 +62,14 @@ window.QuilCombat = (() => {
   const SUMP = [1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1]; // 2d6 with 6 = 0 → sums 0..10, out of 36
   const pAtLeast = need => need <= 0 ? 1 : need > 10 ? 0 : SUMP.slice(need).reduce((a, b) => a + b, 0) / 36;
   const roll2d6z = () => { const d = () => { const v = 1 + Math.floor(Math.random() * 6); return v === 6 ? 0 : v; }; const a = d(), b = d(); return { a, b, n: a + b }; };
-  const M = () => QuilData.mission1.map;
+  const M = () => MIS().map;
   const terrainAt = (x, y) => M().terrain.find(t => t.cells.some(c => c[0] === x && c[1] === y));
-  const isBlock = (x, y) => terrainAt(x, y)?.type === 'building';
+  const isBlock = (x, y) => { const t = terrainAt(x, y)?.type; return t === 'building' || t === 'mound'; };
   const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-  const quilInCover = () => terrainAt(...battle.quil)?.type === 'cover';
+  const nearMound = c => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => terrainAt(c[0] + dx, c[1] + dy)?.type === 'mound');
+  const cellCover = c => terrainAt(...c)?.type === 'cover' || nearMound(c);
+  const quilInCover = () => cellCover(battle.quil);
+  const coverLabel = () => terrainAt(...battle.quil)?.type === 'cover' ? terrainAt(...battle.quil).label : 'in the lee of a charcoal mound';
   function lineClear(a, b) {
     const n = Math.ceil(dist(a, b) * 3);
     for (let i = 1; i < n; i++) {
@@ -88,8 +96,11 @@ window.QuilCombat = (() => {
   function noticeBonus(e, at, noise) {
     const N = NOISE[noise], sE = canSee(e, at), sQ = seesQuil(e), hears = dist(e.pos, at) <= N.r;
     if (!sE && !sQ && !hears) return null;
-    return (sE || sQ ? 2 : 0) + (sE && sQ ? 1 : 0) + (hears ? N.b : 0) + (e.percep || 0) + (e.aware === 'suspicious' ? 2 : 0) + Math.min(3, Math.max(0, tension() - (battle._victimDown ? 1 : 0))) - Math.floor(dist(e.pos, at) / TUNE.distDiv);
+    return (sE || sQ ? 2 : 0) + (sE && sQ ? 1 : 0) + (hears ? N.b : 0) + percOf(e) + (e.aware === 'suspicious' ? 2 : 0) + Math.min(3, Math.max(0, tension() - (battle._victimDown ? 1 : 0))) - Math.floor(dist(e.pos, at) / TUNE.distDiv);
   }
+  /* Keen nose: wolves (and the wolf-rider's mount) are +2 to notice a Quil within 3 squares, sight or no sight */
+  /* M2: charcoal smoke hangs over the waystation; goblin eyes are worse in it (noses are not) */
+  const percOf = e => (e.percep || 0) - (e.nose ? 0 : (M().smoke || 0)) + (e.nose && battle && dist(e.pos, battle.quil) <= 3 ? 2 : 0);
   const pAlert = (e, at, noise) => { const b = noticeBonus(e, at, noise); return b === null ? 0 : pAtLeast(TUNE.alertAt - b); };
   /* Tension: after the first body drops, every unalerted goblin is +1 to notice, +1 per fallen, max +3 */
   const tension = () => Math.min(3, battle.enemies.filter(e => e.dead || e.ko).length);
@@ -142,8 +153,8 @@ window.QuilCombat = (() => {
     }
     if (best) battle.quil = best;
   }
-  function enemyAdvance(e) {
-    for (let step = 0; step < 2 && dist(e.pos, battle.quil) > 1.5; step++) {
+  function enemyAdvance(e, steps) {
+    for (let step = 0; step < (steps || 2) && dist(e.pos, battle.quil) > 1.5; step++) {
       let best = null;
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
         const c = [e.pos[0] + dx, e.pos[1] + dy];
@@ -158,7 +169,7 @@ window.QuilCombat = (() => {
 
   /* Painted battle map (1024×576 art, 9×6 grid) with miniature tokens */
   const TOK = { quil: 'assets/art/tokens/quil.webp', cutter: 'assets/art/tokens/cutter.webp', archer: 'assets/art/tokens/archer.webp',
-    troll: 'assets/art/tokens/troll.webp', ko: 'assets/art/tokens/ko.webp', dead: 'assets/art/tokens/dead.webp' };
+    troll: 'assets/art/tokens/troll.webp', wolfrider: 'assets/art/tokens/wolfrider.webp', archer2: 'assets/art/tokens/archer2.webp', cutter2: 'assets/art/tokens/cutter2.webp', ko: 'assets/art/tokens/ko.webp', dead: 'assets/art/tokens/dead.webp' };
   let mapGrid = false, mapZoom = 1;
   function mapSVG(full) {
     const m = M(), W = 1024, H = 576, CW = W / m.cols, CH = H / m.rows;
@@ -182,11 +193,12 @@ window.QuilCombat = (() => {
     const toks = units.map(e => {
       const [cx, cy] = ctr(e.pos), down = e.dead || e.ko;
       if (e.unseen && !down) return `<g class="tok unseen"><ellipse cx="${cx}" cy="${cy + 30}" rx="40" ry="16" class="ring r-unseen"/><text x="${cx}" y="${cy + 10}" class="unseen-q">?</text></g>`;
-      const img = e.dead ? TOK.dead : e.ko ? TOK.ko : e.ranged ? TOK.archer : e.type === 'goblin_brute' ? (TOK.brute || TOK.troll) : TOK.cutter;
+      const v2 = MID === 2 && e.uid.endsWith('2') ? '2' : ''; // M2 mixes the new sculpts in
+      const img = e.dead ? TOK.dead : e.ko ? TOK.ko : e.token ? TOK[e.token] : e.ranged ? TOK['archer' + v2] : e.type === 'goblin_brute' ? (TOK.brute || TOK.troll) : TOK['cutter' + (MID === 2 && /[246]$/.test(e.uid) ? '2' : '')];
       const ring = down ? 'r-down' : 'r-' + e.aware;
       const mark = down ? '' : e.aware === 'alerted' ? '❗' : e.aware === 'suspicious' ? '❓' : '💤';
       const pa = sel && !down && e !== sel && e.aware !== 'alerted' ? Math.round(pAlert(e, sel.pos, 'loud') * 100) : 0;
-      const lab = e.ranged ? 'A' : e.type === 'goblin_brute' ? 'B' : e.name.replace(/\D/g, '') || 'G';
+      const lab = e.type === 'wolf' ? 'Wf' : e.type === 'wolf_rider' ? (e.mounted ? 'WR' : 'R') : e.ranged ? 'A' + (MID === 2 ? e.uid.slice(-1) : '') : e.type === 'goblin_brute' ? 'B' : e.name.replace(/\D/g, '') || 'G';
       const pips = down ? '' : `<g class="pips">${Array.from({ length: e.maxHp }, (_, i) => `<rect x="${cx - e.maxHp * Math.min(10, 100 / e.maxHp) / 2 + i * Math.min(10, 100 / e.maxHp)}" y="${cy + S * 0.5}" width="${Math.min(10, 100 / e.maxHp) - 2}" height="8" class="${i < e.hp ? 'pip-on' : 'pip-off'}"/>`).join('')}</g>`;
       return `<g class="tok ${down ? 'down' : ''}${sel === e ? ' sel' : ''}" data-uid="${e.uid}">
         ${sel === e ? `<ellipse cx="${cx}" cy="${cy + S * 0.36}" rx="${S * 0.5}" ry="${S * 0.2}" class="sel-glow"/>` : ''}
@@ -199,7 +211,7 @@ window.QuilCombat = (() => {
     const [qx, qy] = ctr(battle.quil);
     const q = `<g class="tok quil">${token(qx, qy, TOK.quil, 'r-quil' + (quilInCover() ? ' covered' : ''))}</g>`;
     return `<svg viewBox="0 0 ${W} ${H}" class="tac-svg${full ? ' full' : ''}" preserveAspectRatio="xMidYMid meet">
-      <image href="assets/art/battlemap_m1.webp" x="0" y="0" width="${W}" height="${H}"/>
+      <image href="${m.art || 'assets/art/battlemap_m1.webp'}" x="0" y="0" width="${W}" height="${H}"/>
       <rect class="t-bg-hit" x="0" y="0" width="${W}" height="${H}"/>${grid}${cones}${toks}${q}</svg>`;
   }
   function bindMap(host) {
@@ -213,12 +225,12 @@ window.QuilCombat = (() => {
       battle.selected = e.uid; renderEnemies(); renderMap(); renderActions();
       toast(`${e.name} · ${e.aware} · HP ${e.hp}/${e.maxHp}`);
     });
-    const qt = host.querySelector('.tok.quil'); if (qt) qt.onclick = ev => { ev.stopPropagation(); toast(`Quil${quilInCover() ? ' · in cover (' + terrainAt(...battle.quil).label + ')' : ''}`); };
+    const qt = host.querySelector('.tok.quil'); if (qt) qt.onclick = ev => { ev.stopPropagation(); toast(`Quil${quilInCover() ? ' · in cover (' + coverLabel() + ')' : ''}`); };
     const svg = host.querySelector('svg');
     svg.querySelector('.t-bg-hit').onclick = ev => {
       const r = svg.getBoundingClientRect(), x = Math.floor((ev.clientX - r.left) / r.width * m.cols), y = Math.floor((ev.clientY - r.top) / r.height * m.rows);
       const t = terrainAt(x, y);
-      toast(t ? `${t.label} · ${({ building: 'blocks movement & sight', fire: 'impassable, burning', cover: 'cover: hides you beyond 2 squares, +1 Def vs arrows', beam: 'high ground: wide, long sight' })[t.type]}` : 'Open cobbles');
+      toast(t ? `${t.label} · ${({ building: 'blocks movement & sight', fire: 'impassable, burning', cover: 'cover: hides you beyond 2 squares, +1 Def vs arrows', beam: 'high ground: wide, long sight', mound: 'smouldering: blocks sight & movement; next to it counts as cover' })[t.type]}${t.stump ? ' · something is wedged under its roots' : ''}` : (m.ground || 'Open cobbles'));
     };
   }
   function renderMap() {
@@ -245,7 +257,7 @@ window.QuilCombat = (() => {
     let fm = document.getElementById('tac-full');
     if (!fm) {
       fm = document.createElement('div'); fm.id = 'tac-full';
-      fm.innerHTML = `<div class="tf-top"><span class="cinzel">Hollowmere Square</span><span><button class="tac-btn" data-z="-1">−</button><button class="tac-btn" data-z="1">+</button><button class="vw-close" id="tf-close">✕</button></span></div>
+      fm.innerHTML = `<div class="tf-top"><span class="cinzel">${M().title || 'Hollowmere Square'}</span><span><button class="tac-btn" data-z="-1">−</button><button class="tac-btn" data-z="1">+</button><button class="vw-close" id="tf-close">✕</button></span></div>
         <div class="tf-scroll"><div class="tf-stage"></div></div><div class="tf-hint">Tap a goblin to target it, or tap the ground to identify terrain. Use + and − to zoom, then drag to pan.</div>`;
       document.getElementById('app').appendChild(fm);
       fm.querySelector('#tf-close').onclick = () => fm.remove();
@@ -273,11 +285,12 @@ window.QuilCombat = (() => {
   function rollTxt(r) { return r ? ` · roll ${r.natural}${r.modTotal ? '+' + r.modTotal : ''}=${r.total} vs ${r.target}` : ''; }
 
   /* Cinematic kill card: first of each type, criticals, the final kill, else ~35% */
-  const KILL_ART = { takedown: ['battle.takedown', 'Silent Takedown'], melee: ['battle.kill_melee', 'Kill · Hatchet'], arrow: ['battle.kill_arrow', 'Kill · Arrow'], throw: ['battle.kill_throw', 'Kill · Improvised Throw'] };
+  const KILL_ART = { wolfrider: ['battle.kill_wolfrider', 'Kill · The Wolf-Rider'], takedown: ['battle.takedown', 'Silent Takedown'], melee: ['battle.kill_melee', 'Kill · Hatchet'], arrow: ['battle.kill_arrow', 'Kill · Arrow'], throw: ['battle.kill_throw', 'Kill · Improvised Throw'] };
   async function killCine(kind, crit) {
     const s = QuilSave.get(); s.flags.cineSeen = s.flags.cineSeen || {};
+    if (battle._lastKill && battle._lastKill.type === 'wolf_rider' && !battle._wrCine) { kind = 'wolfrider'; battle._wrCine = true; }
     const first = !s.flags.cineSeen[kind], final = living().length === 0;
-    if (!(first || crit || final || Math.random() < 0.35)) return;
+    if (!(first || crit || final || kind === 'wolfrider' || Math.random() < 0.35)) return;
     s.flags.cineSeen[kind] = 1; QuilSave.save();
     const narr = (battle.log.filter(l => l.narr).slice(-1)[0] || {}).narr || '';
     const [art, cap] = KILL_ART[kind];
@@ -293,6 +306,13 @@ window.QuilCombat = (() => {
         "A flour-white face shows at the mill-loft shutter for half a heartbeat, then vanishes. Someone up there is still alive.",
       ];
       others.push({ name: 'The Mill Loft', text: lines[battle.round % lines.length] });
+    } else if (battle.missionId === 2) {
+      const lines = [
+        "Behind the wolf pen someone is swearing, low and steady and astonishingly inventive, at a padlock.",
+        "From the pen comes a woman's voice, dry as old bark: \"Whoever you are, do try not to die before you reach the key.\"",
+        "The wolves in the pen pace and whine at the smell of blood. A woman's voice hushes them, as if they were hers.",
+      ];
+      others.push({ name: 'The Wolf Pen', text: lines[battle.round % lines.length] });
     }
     const r = QuilNarrate.recap(battle, h, others);
     battle.log.push({ recap: true, round: battle.round, data: r, t: Date.now() });
@@ -487,15 +507,15 @@ window.QuilCombat = (() => {
       if (act === 'watch') {
         if ((battle._watched || 0) >= 3) return toast('Waiting any longer would be a risk');
         battle._watched = (battle._watched || 0) + 1;
-        log('Wait and watch', '', 'You crouch in the smoke at the edge of the square and watch the goblins walk their loot-rounds.');
+        log('Wait and watch', '', MID === 2 ? 'You lie flat in the bracken at the forest edge and count them: the platforms, the fire, the wolf that lifts its head and tastes the wind.' : 'You crouch in the smoke at the edge of the square and watch the goblins walk their loot-rounds.');
         battle.phase = 'enemy'; await enemyTurn();
         if (battle.phase === 'player' && !anyAlerted()) battle.phase = 'approach';
         renderAll(); return;
       }
       if (!['sneak', 'hidden', 'assault'].includes(act)) return;
       battle.phase = 'player';
-      if (act === 'sneak') { battle.approach = 'melee-stealth'; log('Opener · Melee Stealth', '', QuilNarrate.pick('sneak_begin')); await doSneak(); }
-      else if (act === 'hidden') { battle.approach = 'ranged-stealth'; log('Opener · Ranged Stealth', '', 'You nock an arrow behind the chapel corner and pick your mark through the smoke.'); await doShoot(); }
+      if (act === 'sneak') { battle.approach = 'melee-stealth'; log('Opener · Melee Stealth', '', QuilNarrate.pick(MID === 2 ? 'sneak_begin_m2' : 'sneak_begin')); await doSneak(); }
+      else if (act === 'hidden') { battle.approach = 'ranged-stealth'; log('Opener · Ranged Stealth', '', MID === 2 ? 'You nock an arrow in the bracken at the treeline and wait for the charcoal smoke to thin across your mark.' : 'You nock an arrow behind the chapel corner and pick your mark through the smoke.'); await doShoot(); }
       else await doAssault();
       return;
     }
@@ -536,8 +556,9 @@ window.QuilCombat = (() => {
     }
     if (choke) {
       prey.ko = true; prey.hp = 0; prey.engaged = false;
-      log(`Choke-out · ${prey.name} KO${rollTxt(roll)}`, 'ok', QuilNarrate.pick('sneak_ko', { e: prey.name, w: wName() }));
-      battle.captives.push(prey.uid); battle.fallenWeapons.push(prey.weapon);
+      if (prey.beast) { prey.dead = true; prey.ko = false; }
+      log(`Choke-out · ${prey.name} ${prey.beast ? 'throttled' : 'KO'}${rollTxt(roll)}`, 'ok', QuilNarrate.pick('sneak_ko', { e: prey.name, w: wName() }));
+      if (!prey.beast) battle.captives.push(prey.uid); if (prey.weapon) battle.fallenWeapons.push(prey.weapon);
     } else {
       const inv = QuilSave.get().inventory;
       const dmg = weaponDamage(inv.mainHand, roll.natural, true) + 4 + (prey.aware === 'unaware' ? 1 : 0);
@@ -550,12 +571,13 @@ window.QuilCombat = (() => {
         renderAll();
         return afterPlayerAction();
       }
-      prey.dead = true; prey.hp = 0; prey.engaged = false;
+      prey.dead = true; prey.hp = 0; prey.engaged = false; battle._lastKill = prey;
       log(`Silent kill · ${prey.name} · ${dmg >= prey.maxHp ? dmg : 'vital'} dmg${rollTxt(roll)}`, 'crit', QuilNarrate.pick('sneak_kill', { e: prey.name, w: wName() }));
-      battle.fallenWeapons.push(prey.weapon);
-      await killCine('takedown', roll.outcome === 'critical');
+      if (prey.weapon) battle.fallenWeapons.push(prey.weapon);
+      await killCine(prey.type === 'wolf_rider' ? 'wolfrider' : 'takedown', roll.outcome === 'critical');
     }
     perceive(prey.pos, 'quiet', prey, 'takedown');
+    checkWolf(); await flushCine();
     renderAll();
     if (living().length === 0) return endCombat(true);
     await afterPlayerAction();
@@ -563,7 +585,7 @@ window.QuilCombat = (() => {
 
   async function doAssault() {
     battle.approach = 'assault';
-    log('Opener · Open Assault · free volley · all alerted', 'ok', QuilNarrate.pick('assault'));
+    log('Opener · Open Assault · free volley · all alerted', 'ok', QuilNarrate.pick(MID === 2 ? 'assault_m2' : 'assault'));
     living().forEach(e => setAware(e, 'alerted'));
     // Free volley at archer preference or first
     const inv = QuilSave.get().inventory;
@@ -610,8 +632,9 @@ window.QuilCombat = (() => {
         log(`Subdue · ${dmg} Stun (total ${target.stun}/${target.hp})${rollTxt(roll)}${ko ? ' · KO' : ''}`, ko ? 'crit' : 'ok', QuilNarrate.pick(ko ? 'subdue_ko' : 'subdue_hit', ctx));
         if (ko) {
           target.ko = true; target.hp = 0;
-          battle.captives.push(target.uid);
-          battle.fallenWeapons.push(target.weapon);
+          if (target.beast) { target.ko = false; target.dead = true; } else battle.captives.push(target.uid);
+          if (target.weapon) battle.fallenWeapons.push(target.weapon);
+          checkWolf();
         }
       } else {
         const crit = roll.outcome === 'critical';
@@ -624,7 +647,7 @@ window.QuilCombat = (() => {
       }
     }
     perceive(target.pos, 'loud', target, 'open melee');
-    renderAll();
+    renderAll(); await flushCine();
     if (living().length === 0) return endCombat(true);
     await afterPlayerAction();
   }
@@ -633,8 +656,30 @@ window.QuilCombat = (() => {
     target.hp -= dmg;
     if (target.hp <= 0) {
       target.hp = 0; target.dead = true; target.engaged = false;
-      battle.fallenWeapons.push(target.weapon);
+      if (target.weapon) battle.fallenWeapons.push(target.weapon);
     }
+    battle._lastKill = target.dead ? target : null;
+    checkWolf();
+  }
+  /* The Wolf-Rider: below half HP (or dropped outright) it is unhorsed and the wolf fights on as its own 10 HP enemy.
+     Whoever brings the rider down (dead or senseless) gets the cage key off its belt. */
+  function checkWolf() {
+    battle.enemies.filter(e => e.type === 'wolf_rider').forEach(r => {
+      if ((r.dead || r.ko) && !battle.wolfKey) { battle.wolfKey = true; log('The cage key hangs from the Wolf-Rider\'s belt', 'ok', QuilNarrate.pick('wr_key', { e: r.name })); }
+      if (!r.mounted || !(r.dead || r.ko || r.hp < r.maxHp / 2)) return;
+      r.mounted = false; r.fast = false; r.nose = false; r.charge = false;
+      if (!r.dead && !r.ko) { r.name = 'Unhorsed Wolf-Rider'; r.guard = 5; r.attack = 6; r.dmg = 4; }
+      const m = MIS(), wolf = mkEnemy({ type: 'wolf', id: 'wf1' }, 0, m);
+      let spot = null;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [0, 2], [-2, 0]]) { const c = [r.pos[0] + dx, r.pos[1] + dy]; if (freeCell(...c)) { spot = c; break; } }
+      wolf.pos = spot || r.pos.slice(); wolf.facing = faceTo(wolf.pos, battle.quil);
+      const silent = (r.dead || r.ko) && r.aware !== 'alerted' && !anyAlerted();
+      wolf.aware = silent ? 'unaware' : 'alerted'; if (silent) wolf.facing = ({ N: 'S', S: 'N', E: 'W', W: 'E' })[wolf.facing]; wolf.engaged = dist(wolf.pos, battle.quil) <= 1.5;
+      battle.enemies.push(wolf);
+      log(r.dead || r.ko ? `The wolf throws its fallen rider · Grey Wolf (10 HP) fights on${silent ? ' · it bolts, nose to the ash' : ''}` : `Unhorsed! ${r.name} is thrown · Grey Wolf (10 HP) fights on`, 'fail',
+        QuilNarrate.pick(r.dead || r.ko ? 'wr_rider_down' : 'wr_unhorse', { e: r.name }));
+      if (!battle._wolfCine) { battle._wolfCine = true; battle._pendingCine = ['enemy.wolf_rider', (battle.log.slice(-1)[0] || {}).narr, r.dead || r.ko ? 'The wolf fights on' : 'Unhorsed · the wolf fights on']; }
+    });
   }
 
   async function doShoot(freeVolley) {
@@ -683,8 +728,9 @@ window.QuilCombat = (() => {
         log(`Blunt · ${dmg} Stun (total ${target.stun}/${target.hp})${rollTxt(roll)}${ko ? ' · KO' : ''}`, ko ? 'crit' : 'ok', QuilNarrate.pick(ko ? 'arrow_ko' : 'arrow_hit_blunt', actx));
         if (ko) {
           target.ko = true; target.hp = 0;
-          battle.captives.push(target.uid);
-          battle.fallenWeapons.push(target.weapon);
+          if (target.beast) { target.ko = false; target.dead = true; } else battle.captives.push(target.uid);
+          if (target.weapon) battle.fallenWeapons.push(target.weapon);
+          checkWolf();
         }
       } else {
         if (arrow.bleed) { target.bleed = (target.bleed || 0) + arrow.bleed; }
@@ -700,6 +746,7 @@ window.QuilCombat = (() => {
         if (target.dead) await killCine('arrow', crit);
       }
     }
+    await flushCine();
     if (target.dead || target.ko) perceive(target.pos, noise, target, hidden ? 'hidden kill' : 'arrow kill');
     else {
       if (target.aware !== 'alerted') log(roll.outcome === 'fail' || roll.outcome === 'fumble' ? `${target.name} sees where the arrow came from` : `${target.name} screams · wounded, alerted`, 'fail',
@@ -807,13 +854,13 @@ window.QuilCombat = (() => {
     let best = null, bestScore = 1e9;
     for (let x = 0; x < m.cols; x++) for (let y = 0; y < m.rows; y++) {
       if (dist([x, y], here) > 3 || !(freeCell(x, y) || (x === here[0] && y === here[1]))) continue;
-      const cov = terrainAt(x, y)?.type === 'cover';
+      const cov = cellCover([x, y]);
       const seen = living().filter(e => canSee(e, [x, y]) && !(cov && dist(e.pos, [x, y]) > 2)).length;
       const sc = seen * 10 + (cov ? 0 : 3) + dist([x, y], here) * 0.1;
       if (sc < bestScore) { bestScore = sc; best = [x, y]; }
     }
     if (best) battle.quil = best;
-    log(`Slip into cover${quilInCover() ? ' · ' + terrainAt(...battle.quil).label : ''}`, 'ok', 'You ease back through the smoke, keeping low, and fold yourself into the nearest shadow.');
+    log(`Slip into cover${quilInCover() ? ' · ' + coverLabel() : ''}`, 'ok', 'You ease back through the smoke, keeping low, and fold yourself into the nearest shadow.');
     renderMap();
     await afterPlayerAction();
   }
@@ -836,9 +883,10 @@ window.QuilCombat = (() => {
   async function afterPlayerAction() {
     // Tick DoTs on enemies
     living().forEach(e => {
-      if (e.bleed) { e.hp -= e.bleed; log(`Bleed · ${e.bleed} dmg`, 'ok', QuilNarrate.pick('bleed', { e: e.name })); if (e.hp <= 0) { e.dead = true; e.hp = 0; battle.fallenWeapons.push(e.weapon); } }
-      if (e.burn && e._burnRounds > 0) { e.hp -= e.burn; e._burnRounds--; log(`Burn · ${e.burn} dmg`, 'ok', QuilNarrate.pick('burn', { e: e.name })); if (e.hp <= 0) { e.dead = true; e.hp = 0; battle.fallenWeapons.push(e.weapon); } }
+      if (e.bleed) { log(`Bleed · ${e.bleed} dmg`, 'ok', QuilNarrate.pick('bleed', { e: e.name })); applyDamage(e, e.bleed); }
+      if (e.burn && e._burnRounds > 0 && !e.dead) { e._burnRounds--; log(`Burn · ${e.burn} dmg`, 'ok', QuilNarrate.pick('burn', { e: e.name })); applyDamage(e, e.burn); }
     });
+    await flushCine();
     renderAll();
     if (living().length === 0) return endCombat(true);
     battle.phase = 'enemy';
@@ -860,9 +908,9 @@ window.QuilCombat = (() => {
     const bodies = battle.enemies.filter(b => (b.dead || b.ko) && !b._found);
     for (const e of foes) {
       if (e.aware === 'alerted') continue;
-      const seen = bodies.find(b => canSee(e, b.pos) && dist(e.pos, b.pos) <= TUNE.bodyRange); // smoke and dark hide bodies further off
+      const seen = bodies.find(b => !(e.beast && b.type === 'wolf_rider') && canSee(e, b.pos) && dist(e.pos, b.pos) <= TUNE.bodyRange); // smoke and dark hide bodies further off
       if (!seen) continue;
-      const r = roll2d6z(), b = TUNE.bodyBonus + (e.percep || 0) + tension() + (e.aware === 'suspicious' ? 2 : 0) - Math.floor(dist(e.pos, seen.pos) / TUNE.distDiv), tot = r.n + b;
+      const r = roll2d6z(), b = TUNE.bodyBonus - (M().smoke || 0) + percOf(e) + tension() + (e.aware === 'suspicious' ? 2 : 0) - Math.floor(dist(e.pos, seen.pos) / TUNE.distDiv), tot = r.n + b;
       if (tot >= TUNE.alertAt) {
         seen._found = true; setAware(e, 'alerted', true);
         log(`${e.name} finds ${seen.name}'s body · ${r.a}+${r.b}+${b}=${tot} → alerted`, 'fail', `${e.name} stumbles over ${seen.name}, sprawled in the ash, and goes rigid.`);
@@ -875,21 +923,32 @@ window.QuilCombat = (() => {
     // Searchers: suspicious goblins turn toward Quil and look (quiet check, only if they can see him)
     foes.filter(e => e.aware === 'suspicious').forEach(e => {
       e.facing = faceTo(e.pos, battle.quil);
-      if (!seesQuil(e)) return;
-      const r = roll2d6z(), b = 2 + 2 + (e.percep || 0) + tension() - Math.floor(dist(e.pos, battle.quil) / TUNE.distDiv), tot = r.n + b;
+      const sniff = e.nose && dist(e.pos, battle.quil) <= 3;
+      if (!seesQuil(e) && !sniff) return;
+      if (sniff && !seesQuil(e)) log(`${e.name} has your scent`, '', QuilNarrate.pick('wolf_sniff', { e: e.name }));
+      const r = roll2d6z(), b = 2 + 2 + percOf(e) + tension() - Math.floor(dist(e.pos, battle.quil) / TUNE.distDiv), tot = r.n + b;
       if (tot >= TUNE.alertAt) { setAware(e, 'alerted'); log(`${e.name} searches · ${r.a}+${r.b}+${b}=${tot} → alerted`, 'fail', `${e.name} squints into the smoke, and finds you.`); }
       else log(`${e.name} searches · ${r.a}+${r.b}+${b}=${tot} · nothing`, '');
     });
-    const attackers = living().filter(e => e.aware === 'alerted');
+    const attackers = living().filter(e => e.aware === 'alerted').sort((a, b) => (b.fast ? 1 : 0) - (a.fast ? 1 : 0));
     if (!attackers.length) log('No one has found you yet', 'ok');
     const cutters = attackers.filter(e => e.type === 'goblin_cutter').length;
     let clash = false;
     for (const e of attackers) {
       if (e.dead || e.ko) continue;
       if (e._skipNext) { e._skipNext = false; log(`${e.name} loses its turn`, '', QuilNarrate.pick('stagger', { e: e.name })); continue; }
-      if (!e.ranged) { enemyAdvance(e); renderMap(); if (!e.engaged) { log(`${e.name} closes in`, '', null); continue; } clash = true; }
+      let charged = false;
+      if (!e.ranged) {
+        const d0 = dist(e.pos, battle.quil);
+        // Charge: a mounted wolf-rider covers up to 4 squares in a rush and hits harder for it
+        enemyAdvance(e, e.charge && d0 > 1.5 && d0 <= 5 ? 4 : 2); renderMap();
+        if (!e.engaged) { log(`${e.name} closes in`, '', e.fast ? QuilNarrate.pick(e.type === 'wolf' ? 'wolf_close' : 'wr_close', { e: e.name }) : null); continue; }
+        clash = true;
+        if (e.charge && d0 > 1.5) { charged = true; log(`${e.name} charges · +1 Attack, +2 damage`, 'fail', QuilNarrate.pick('wr_charge', { e: e.name })); }
+      }
       else if (!canSee(Object.assign({}, e, { facing: faceTo(e.pos, battle.quil) }), battle.quil)) { log(`${e.name} has no line on you`, 'ok'); continue; }
-      await hitQuil(e, 1, cutters >= 3 ? 1 : 0);
+      await hitQuil(e, 1, (cutters >= 3 && e.type === 'goblin_cutter' ? 1 : 0) + (charged ? 1 : 0), charged ? 2 : 0);
+      await flushCine();
       if (living().length === 0) return endCombat(true);
       if (QuilSave.get().hero.hp <= 0) {
         QuilSave.get().hero.hp = 0;
@@ -917,7 +976,7 @@ window.QuilCombat = (() => {
     QuilSave.save();
   }
 
-  async function hitQuil(enemy, mult, swarmBonus) {
+  async function hitQuil(enemy, mult, swarmBonus, plusDmg) {
     const atk = enemy.attack + (swarmBonus || 0);
     const roll = await QuilDice.promptRoll({
       title: `Defend vs ${enemy.name}`,
@@ -925,10 +984,10 @@ window.QuilCombat = (() => {
       modifiers: modsFor('defence').concat(enemy.ranged && quilInCover() ? [{ label: 'Cover', value: 1 }] : []),
     });
     const s = QuilSave.get();
-    let dmg = Math.floor(enemy.dmg * (mult || 1));
-    const ew = enemy.ranged ? 'arrow' : 'shiv';
+    let dmg = Math.floor(enemy.dmg * (mult || 1)) + (plusDmg || 0);
+    const ew = enemy.ranged ? 'arrow' : enemy.beast ? 'fangs' : enemy.mounted ? 'spear' : 'shiv';
     const ectx = { e: enemy.name, w: ew };
-    const R = enemy.ranged ? '_ranged' : '';
+    const R = enemy.ranged ? '_ranged' : (enemy.beast || enemy.mounted) ? '_beast' : '';
     const pk = k => QuilNarrate.pools[k + R] ? k + R : k;
     if (roll.outcome === 'critical' || roll.outcome === 'strong') {
       const rip = 2 + s.hero.might;
@@ -960,11 +1019,12 @@ window.QuilCombat = (() => {
     renderHero();
     if (!battle._woundCine && s.hero.hp > 0 && s.hero.hp < s.hero.maxHp * 0.3) {
       battle._woundCine = true;
-      await QuilExtras.cine('battle.wounded', `Blood runs hot down your side and the square tilts. They can smell it. ${enemy.name} grins and closes in, and so do the others. Get up, Quil.`, `Badly wounded · HP ${s.hero.hp}/${s.hero.maxHp}`);
+      await QuilExtras.cine('battle.wounded', `Blood runs hot down your side and the ${MID === 2 ? 'clearing' : 'square'} tilts. They can smell it. ${enemy.name} grins and closes in, and so do the others. Get up, Quil.`, `Badly wounded · HP ${s.hero.hp}/${s.hero.maxHp}`);
     }
   }
 
   function renderAll() {
+    checkWolf();
     if (living().length && living().every(e => e.unseen)) living().forEach(e => { e.unseen = false; });
     renderMap();
     renderEnemies();
@@ -973,15 +1033,16 @@ window.QuilCombat = (() => {
     renderLog();
   }
 
-  function start(cb) {
+  function start(cb, missionId) {
     onEnd = cb;
-    battle = spawnMission1();
+    battle = spawnMission(missionId || 1);
     // Seed fallen weapons empty; engage none yet
     document.getElementById('screen-combat').classList.add('active');
     hideOthers('screen-combat');
     document.getElementById('bottom-nav').classList.remove('visible');
-    QuilArt.mount(document.querySelector('#combat-scene-art'), 'scene.town_square');
-    log('Choose your opener: Open Assault, Melee Stealth or Ranged Stealth', '', QuilNarrate.pick('intro'));
+    QuilArt.mount(document.querySelector('#combat-scene-art'), MID === 2 ? 'scene.charcoal_track' : 'scene.town_square');
+    if (MID === 2) window.QuilExtras?.unlock?.('map.battle_m2');
+    log('Choose your opener: Open Assault, Melee Stealth or Ranged Stealth', '', QuilNarrate.pick(MID === 2 ? 'intro_m2' : 'intro'));
     battle.selected = 'gc1';
     renderAll();
     QuilSave.save();
@@ -1010,7 +1071,7 @@ window.QuilCombat = (() => {
     QuilSave.save();
     await new Promise(r => setTimeout(r, 900));
     // Interrogation if captives
-    const kos = battle.enemies.filter(e => e.ko);
+    const kos = battle.enemies.filter(e => e.ko && !e.beast);
     if (kos.length) {
       await doInterrogation(kos[0]);
     }
@@ -1061,9 +1122,11 @@ window.QuilCombat = (() => {
         const s = QuilSave.get();
         const c = { e: captive.name };
         let key, mech, gained = [];
-        if (roll.outcome === 'critical') { gained = QuilData.mission1.intel.slice(); key = 'int_crit'; mech = 'Critical · all intel'; }
-        else if (roll.outcome === 'strong') { gained = QuilData.mission1.intel.slice(0, 2); key = 'int_strong'; mech = 'Strong · 2 intel cards'; }
-        else if (roll.outcome === 'success') { gained = [QuilData.mission1.intel[0]]; key = 'int_ok'; mech = 'Success · 1 intel card'; }
+        const have = t => (s.intel || []).some(i => i.text === t.text);
+        const pool = MIS().intel.filter(i => !have(i));
+        if (roll.outcome === 'critical') { gained = pool.slice(); key = 'int_crit'; mech = 'Critical · all intel'; }
+        else if (roll.outcome === 'strong') { gained = pool.slice(0, 2); key = 'int_strong'; mech = 'Strong · 2 intel cards'; }
+        else if (roll.outcome === 'success') { gained = pool.slice(0, 1); key = 'int_ok'; mech = 'Success · 1 intel card'; }
         else if (roll.margin <= -3 || roll.outcome === 'fumble') { gained = [{ type: '?', text: 'False: "They fled north."', false: true }]; key = 'int_lie'; mech = 'Failed badly · a lie (marked ?)'; }
         else { key = 'int_silent'; mech = 'Fail · nothing'; }
         let narr = QuilNarrate.pick(key, c);
@@ -1071,10 +1134,10 @@ window.QuilCombat = (() => {
           // Wits: see through the goblin's lie
           const w = await QuilDice.promptRoll({ title: 'Wits · Is it lying?', target: 6, modifiers: [{ label: 'Wits', value: h.wits }] });
           const seen = ['success', 'strong', 'critical'].includes(w.outcome);
-          if (seen) { gained = [QuilData.mission1.intel[0]]; mech += ` · Wits ${w.total} vs 6: lie exposed, the truth beaten out of it`; narr += ' But its eyes flick east as it says "north", and you know. You lean in until it tells you the truth.'; }
+          if (seen) { gained = pool.slice(0, 1); mech += ` · Wits ${w.total} vs 6: lie exposed, the truth beaten out of it`; narr += ' But its eyes flick east as it says "north", and you know. You lean in until it tells you the truth.'; }
           else mech += ` · Wits ${w.total} vs 6: you believe it`;
         }
-        gained.forEach(i => s.intel.push(i));
+        gained.forEach(i => s.intel.push(Object.assign({ m: MID }, i)));
         log(mech + rollTxt(roll), gained.length ? 'ok' : 'fail', narr);
         QuilSave.save();
         const sheet = overlay.querySelector('.dice-sheet');
