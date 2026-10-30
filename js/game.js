@@ -291,6 +291,7 @@ window.QuilGame = (() => {
     const m = QuilData.mission1;
     s.flags.m1Stage = 'loot';
     if (!s.flags.m1Looted) {
+    const wasOver = QuilSave.overloaded(); setTimeout(() => warnIfOver(wasOver), 400);
     s.flags.m1Looted = true;
     s.hero.gold += m.loot.gold;
     Object.entries(m.loot.jewels || {}).forEach(([k, v]) => {
@@ -582,28 +583,76 @@ window.QuilGame = (() => {
       <div class="purse"><span>⚜ ${s.hero.gold}g</span>
         <span>${Object.entries(s.hero.jewels).map(([k,v]) => `${v} ${k}`).join(', ') || 'no jewels'}</span></div>
       <div class="equip-doll">
-        <div class="slot-card"><span class="thumb" data-art="item.hatchet"></span><div class="lab">Main hand</div><div class="item">${w(inv.mainHand)}</div></div>
-        <div class="slot-card"><span class="thumb" data-art="item.bow"></span><div class="lab">Bow</div><div class="item">${w(inv.bow)}</div></div>
+        <div class="slot-card"><span class="thumb" data-art="item.hatchet"></span><div class="lab">Main hand</div><div class="item">${w(inv.mainHand)}</div><div class="wt">${lb(QuilSave.weaponWt(inv.mainHand))}</div></div>
+        <div class="slot-card"><span class="thumb" data-art="item.bow"></span><div class="lab">Bow</div><div class="item">${w(inv.bow)}</div><div class="wt">${lb(QuilSave.weaponWt(inv.bow))}</div></div>
         <div class="slot-card"><div class="lab">Armour</div><div class="item">${inv.armour || 'None'}</div></div>
-        <div class="slot-card"><span class="thumb" data-art="item.arrows"></span><div class="lab">Quiver</div><div class="item">${Object.entries(inv.quiver).filter(([,n])=>n>0).map(([k,n])=>`${k}×${n}`).join(', ')||'empty'}</div></div>
+        <div class="slot-card"><span class="thumb" data-art="item.arrows"></span><div class="lab">Quiver</div><div class="item">${Object.entries(inv.quiver).filter(([,n])=>n>0).map(([k,n])=>`${k}×${n}`).join(', ')||'empty'}</div><div class="wt">${lb(Object.values(inv.quiver).reduce((a, n) => a + (n || 0), 0) * QuilSave.WT.arrow)}</div></div>
       </div>
-      <h3 class="cinzel" style="color:var(--gold);font-size:14px">Pack</h3>
+      ${loadBar()}
+      <h3 class="cinzel" style="color:var(--gold);font-size:14px">Pack <small class="pack-hint">tap an item to drop it</small></h3>
       <div class="pack-grid" id="pack-grid"></div>`;
     mountThumbs($('pack-root'));
-    const grid = $('pack-grid');
-    const entries = inv.pack.map(item => {
-      const wd = QuilData.weapons[item];
-      return `<div class="ico">${wd?.type === 'bow' ? '🏹' : '⚔️'}</div>${wd?.name || item}`;
-    }).concat(Object.entries(s.items || {}).filter(([, n]) => n > 0).map(([k, n]) =>
-      `<div class="ico">${QuilExtras.ITEM[k]?.icon || '🎒'}</div>${QuilExtras.ITEM[k]?.name || k} ×${n}`));
+    renderPackGrid($('pack-grid'), () => showPack());
+  }
+
+  /* ---- Weight & encumbrance UI ---- */
+  const lb = n => QuilSave.fmtLb(n);
+  function loadBar() {
+    const c = QuilSave.carried(), cap = QuilSave.capacity(), over = c > cap;
+    return `<div class="load-bar${over ? ' over' : ''}"><div class="lb-row"><span>Load ${lb(c).replace(' lb', '')} / ${cap} lb</span><span class="lb-cap">Might ${QuilSave.get().hero.might} · 30 + 5×Might</span></div>
+      <div class="lb-track"><i style="width:${Math.min(100, c / cap * 100)}%"></i></div>
+      ${over ? `<div class="lb-warn">⚠ Over-encumbered: −1 to Edge rolls (stealth, bow, flee) and −2 on the forced march. Drop something.</div>` : ''}</div>`;
+  }
+  // Pack cells: weapons in pack, then supply stacks. Tap a cell to drop it (equipped kit lives in the slots above and can't be dropped).
+  function packEntries() {
+    const s = QuilSave.get(), inv = s.inventory;
+    return inv.pack.map((id, i) => ({ kind: 'w', id, i, ico: QuilData.weapons[id]?.type === 'bow' ? '🏹' : '⚔️', name: QuilData.weapons[id]?.name || id, wt: QuilSave.weaponWt(id) }))
+      .concat(Object.entries(s.items || {}).filter(([, n]) => n > 0).map(([k, n]) => ({ kind: 'i', id: k, n, ico: QuilExtras.ITEM[k]?.icon || '🎒', name: `${QuilExtras.ITEM[k]?.name || k} ×${n}`, wt: n * QuilSave.itemWt(k) })));
+  }
+  function dropEntry(e) {
+    const s = QuilSave.get();
+    if (e.kind === 'w') s.inventory.pack.splice(s.inventory.pack.indexOf(e.id), 1);
+    else s.items[e.id] = Math.max(0, (s.items[e.id] || 0) - 1);
+    QuilSave.save();
+  }
+  function renderPackGrid(grid, after) {
+    const entries = packEntries();
     const slots = Math.max(12, Math.ceil(entries.length / 4) * 4);
+    grid.innerHTML = '';
     for (let i = 0; i < slots; i++) {
-      const cell = document.createElement('div');
-      cell.className = 'pack-cell';
-      cell.innerHTML = entries[i] || `<div class="ico">·</div>`;
+      const e = entries[i], cell = document.createElement('div');
+      cell.className = 'pack-cell' + (e ? ' has' : '');
+      cell.innerHTML = e ? `<div class="ico">${e.ico}</div>${e.name}<div class="wt">${lb(e.wt)}</div>` : `<div class="ico">·</div>`;
+      if (e) cell.onclick = () => {
+        const what = e.kind === 'w' ? e.name : `1 × ${QuilExtras.ITEM[e.id]?.name || e.id} (${lb(QuilSave.itemWt(e.id))})`;
+        if (!confirm(`Drop ${what}? It will be left behind for good.`)) return;
+        dropEntry(e); toast(`Dropped ${e.kind === 'w' ? e.name : QuilExtras.ITEM[e.id]?.name || e.id}`); after();
+      };
       grid.appendChild(cell);
     }
   }
+  // Loot/purchase that would push Quil over: Take anyway / Leave it / Drop something. Resolves true to take.
+  function overflowPrompt(addLb, label) {
+    if (QuilSave.carried() + addLb <= QuilSave.capacity()) return Promise.resolve(true);
+    return new Promise(res => {
+      const ov = document.createElement('div'); ov.className = 'weight-overlay';
+      const draw = () => {
+        const fits = QuilSave.carried() + addLb <= QuilSave.capacity();
+        ov.innerHTML = `<div class="weight-sheet"><h3 class="cinzel">Too heavy?</h3>
+          <p>${label} weighs ${lb(addLb)}. You carry ${lb(QuilSave.carried())} of ${QuilSave.capacity()} lb.${fits ? ' It fits now.' : ' Taking it leaves you over-encumbered.'}</p>
+          ${loadBar()}<div class="pack-grid wo-grid"></div>
+          <div class="choices"><button class="btn primary" data-k="take">${fits ? 'Take it' : 'Take anyway'}</button><button class="btn ghost" data-k="leave">Leave it</button>${fits ? '' : '<button class="btn ghost" data-k="drop">Drop something…</button>'}</div></div>`;
+        ov.querySelectorAll('[data-k]').forEach(b => b.onclick = () => {
+          if (b.dataset.k === 'drop') { ov.querySelector('.wo-grid').classList.add('open'); renderPackGrid(ov.querySelector('.wo-grid'), draw); return; }
+          ov.remove(); const take = b.dataset.k === 'take';
+          if (take && QuilSave.carried() + addLb > QuilSave.capacity()) setTimeout(() => toast('Over-encumbered: −1 to Edge rolls until you drop something'), 50);
+          res(take);
+        });
+      };
+      document.body.appendChild(ov); draw();
+    });
+  }
+  function warnIfOver(wasOver) { if (!wasOver && QuilSave.overloaded()) toast(`Over-encumbered (${lb(QuilSave.carried())} / ${QuilSave.capacity()} lb): −1 to Edge rolls`); }
 
   function showHero() {
     showScreen('screen-hero');
@@ -731,5 +780,5 @@ window.QuilGame = (() => {
     initTitle();
   }
 
-  return { beat, witsRoll, witsCard, checkLevel, mountThumbs, showPlace, initTitle, boot, resumeCurrent, toast, showScreen, showMap, showPack, showHero, showHearth, showJournal, resume };
+  return { overflowPrompt, warnIfOver, loadBar, beat, witsRoll, witsCard, checkLevel, mountThumbs, showPlace, initTitle, boot, resumeCurrent, toast, showScreen, showMap, showPack, showHero, showHearth, showJournal, resume };
 })();

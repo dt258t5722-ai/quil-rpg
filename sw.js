@@ -1,4 +1,4 @@
-const CACHE = 'quil-v12';
+const CACHE = 'quil-v13';
 const ASSETS = [
   './js/mission2.js',
   './assets/art/charcoal_track.webp',

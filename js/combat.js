@@ -469,6 +469,7 @@ window.QuilCombat = (() => {
       const mods = [
         { label: 'Edge', value: h.edge },
         { label: (w?.name || 'Bow') + ' Acc', value: w?.acc || 0 },
+        ...QuilSave.encMods(),
       ];
       return mods;
     }
@@ -480,7 +481,7 @@ window.QuilCombat = (() => {
       ];
     }
     if (kind === 'sneak') {
-      return [{ label: 'Edge', value: h.edge }];
+      return [{ label: 'Edge', value: h.edge }, ...QuilSave.encMods()];
     }
     if (kind === 'throw') {
       return [{ label: 'Might', value: h.might }];
@@ -782,6 +783,7 @@ window.QuilCombat = (() => {
     if (!wpn) return toast('No weapon to grab');
     const w = QuilData.weapons[wpn];
     const inv = QuilSave.get().inventory;
+    if (window.QuilGame?.overflowPrompt && !(await QuilGame.overflowPrompt(QuilSave.weaponWt(wpn), w.name))) { battle.fallenWeapons.push(wpn); renderAll(); return; }
     inv.pack.push(wpn);
     // Optionally equip
     if (w.type === 'melee' && confirm(`Equip ${w.name}? (replaces ${QuilData.weapons[inv.mainHand].name})`)) {
@@ -886,7 +888,7 @@ window.QuilCombat = (() => {
     const roll = await QuilDice.promptRoll({
       title: 'Flee',
       target: 7,
-      modifiers: [{ label: 'Edge', value: QuilSave.get().hero.edge }],
+      modifiers: [{ label: 'Edge', value: QuilSave.get().hero.edge }, ...QuilSave.encMods()],
     });
     if (roll.outcome === 'success' || roll.outcome === 'strong' || roll.outcome === 'critical') {
       log(`Fled${rollTxt(roll)}`, 'ok', QuilNarrate.pick('flee_ok'));

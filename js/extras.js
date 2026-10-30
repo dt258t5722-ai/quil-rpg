@@ -256,19 +256,19 @@
   function apoth() {
     townScreen('place.market', 'Apothecary', `
       <p class="town-blurb">A hunched herb-wife behind a counter of stoppered bottles. Everything smells of yarrow and vinegar.</p>
-      ${['minor_potion', 'potion', 'bandage'].map(k => row(ITEM[k].icon + ' ' + ITEM[k].name, (ITEM[k].heal ? `+${ITEM[k].heal} HP` : '') + (ITEM[k].note ? ' · ' + ITEM[k].note : '') + ` · you have ${S().items[k]}`, PRICES[k] + 'g', k)).join('')}`, back);
-    $('town-body').querySelectorAll('[data-buy]').forEach(b => b.onclick = () => { const k = b.dataset.buy; if (!spend(PRICES[k])) return; S().items[k]++; QuilSave.save(); toast(`Bought ${ITEM[k].name}`); apoth(); });
+      ${['minor_potion', 'potion', 'bandage'].map(k => row(ITEM[k].icon + ' ' + ITEM[k].name, (ITEM[k].heal ? `+${ITEM[k].heal} HP` : '') + (ITEM[k].note ? ' · ' + ITEM[k].note : '') + ` · ${QuilSave.fmtLb(QuilSave.itemWt(k))} · you have ${S().items[k]}`, PRICES[k] + 'g', k)).join('')}`, back);
+    $('town-body').querySelectorAll('[data-buy]').forEach(b => b.onclick = async () => { const k = b.dataset.buy; if (!(await QuilGame.overflowPrompt(QuilSave.itemWt(k), ITEM[k].name))) return; if (!spend(PRICES[k])) return; S().items[k]++; QuilSave.save(); toast(`Bought ${ITEM[k].name}`); apoth(); });
   }
   function general() {
     townScreen('place.market', 'General Store', `
       <p class="town-blurb">Coils of rope, sacks of hard biscuit, and a boy who counts your coins twice.</p>
-      ${['rope', 'ration', 'torch'].map(k => row(ITEM[k].icon + ' ' + ITEM[k].name, ITEM[k].note + ` · you have ${S().items[k]}`, PRICES[k] + 'g', k)).join('')}`, back);
-    $('town-body').querySelectorAll('[data-buy]').forEach(b => b.onclick = () => { const k = b.dataset.buy; if (!spend(PRICES[k])) return; S().items[k]++; QuilSave.save(); toast(`Bought ${ITEM[k].name}`); general(); });
+      ${['rope', 'ration', 'torch'].map(k => row(ITEM[k].icon + ' ' + ITEM[k].name, ITEM[k].note + ` · ${QuilSave.fmtLb(QuilSave.itemWt(k))} · you have ${S().items[k]}`, PRICES[k] + 'g', k)).join('')}`, back);
+    $('town-body').querySelectorAll('[data-buy]').forEach(b => b.onclick = async () => { const k = b.dataset.buy; if (!(await QuilGame.overflowPrompt(QuilSave.itemWt(k), ITEM[k].name))) return; if (!spend(PRICES[k])) return; S().items[k]++; QuilSave.save(); toast(`Bought ${ITEM[k].name}`); general(); });
   }
   function smith() {
     const s = S(), inv = s.inventory;
-    const arrows = Object.entries(PRICES.arrows).map(([k, [n, p]]) => row(`${n} × ${QuilData.arrows[k].name}`, `quiver: ${inv.quiver[k] || 0}`, p + 'g', 'arrow:' + k)).join('');
-    const weapons = Object.entries(PRICES.weapons).map(([k, p]) => row(QuilData.weapons[k].name, `Base ${QuilData.weapons[k].base} · Acc +${QuilData.weapons[k].acc}`, p + 'g', 'wpn:' + k, inv.mainHand === k || inv.pack.includes(k))).join('');
+    const arrows = Object.entries(PRICES.arrows).map(([k, [n, p]]) => row(`${n} × ${QuilData.arrows[k].name}`, `${QuilSave.fmtLb(n * QuilSave.WT.arrow)} · quiver: ${inv.quiver[k] || 0}`, p + 'g', 'arrow:' + k)).join('');
+    const weapons = Object.entries(PRICES.weapons).map(([k, p]) => row(QuilData.weapons[k].name, `Base ${QuilData.weapons[k].base} · Acc +${QuilData.weapons[k].acc} · ${QuilSave.fmtLb(QuilSave.weaponWt(k))}`, p + 'g', 'wpn:' + k, inv.mainHand === k || inv.pack.includes(k))).join('');
     const jewels = Object.entries(s.hero.jewels).filter(([, n]) => n > 0).map(([k, n]) => row(`Sell ${k} (×${n})`, 'fair price', '+' + (PRICES.jewelBuy[k] || 5) + 'g', 'jewel:' + k)).join('');
     const human = inv.pack.filter(id => QuilData.weapons[id] && !QuilData.weapons[id].enemy && id !== 'tomas_hatchet');
     const sellW = human.map(id => row(`Sell ${QuilData.weapons[id].name}`, 'half price', '+' + Math.floor((PRICES.weapons[id] || 20) / 2) + 'g', 'sellw:' + id)).join('');
@@ -280,10 +280,10 @@
       <h4 class="shop-h">Weapons</h4>${weapons}
       <h4 class="shop-h">Sell loot</h4>${jewels || sellW ? jewels + sellW : '<p class="town-note">Nothing they want to buy.</p>'}
       ${rep ? '<h4 class="shop-h">Repairs</h4>' + rep : ''}`, back);
-    $('town-body').querySelectorAll('[data-buy]').forEach(b => b.onclick = () => {
+    $('town-body').querySelectorAll('[data-buy]').forEach(b => b.onclick = async () => {
       const [t, k] = b.dataset.buy.split(':');
-      if (t === 'arrow') { const [n, p] = PRICES.arrows[k]; if (!spend(p)) return; inv.quiver[k] = (inv.quiver[k] || 0) + n; toast(`+${n} ${k} arrows`); }
-      if (t === 'wpn') { if (!spend(PRICES.weapons[k])) return; inv.pack.push(k); toast(`Bought ${QuilData.weapons[k].name}`); }
+      if (t === 'arrow') { const [n, p] = PRICES.arrows[k]; if (!(await QuilGame.overflowPrompt(n * QuilSave.WT.arrow, `${n} ${QuilData.arrows[k].name} arrows`))) return; if (!spend(p)) return; inv.quiver[k] = (inv.quiver[k] || 0) + n; toast(`+${n} ${k} arrows`); }
+      if (t === 'wpn') { if (!(await QuilGame.overflowPrompt(QuilSave.weaponWt(k), QuilData.weapons[k].name))) return; if (!spend(PRICES.weapons[k])) return; inv.pack.push(k); toast(`Bought ${QuilData.weapons[k].name}`); }
       if (t === 'jewel') { s.hero.jewels[k]--; s.hero.gold += PRICES.jewelBuy[k] || 5; toast(`Sold a ${k}`); }
       if (t === 'sellw') { inv.pack.splice(inv.pack.indexOf(k), 1); s.hero.gold += Math.floor((PRICES.weapons[k] || 20) / 2); toast('Sold'); }
       if (t === 'repair') { if (!spend(PRICES.repair * worn.length)) return; toast('Repaired'); }

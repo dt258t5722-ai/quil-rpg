@@ -81,7 +81,7 @@ window.QuilM2 = (() => {
   function march() {
     G().beat('scene.camp', `<p>Smoke on the ${({ N: 'north', E: 'east', S: 'south', W: 'west' })[S().flags.m2Wind] || 'east'} wind: the waystation is close, but the rear guard will move at first light. No camp tonight. You walk on blistered feet through the dark.</p>`, [
       { label: 'March through the night  [Grit vs 6]', fn: async () => {
-        const r = await gritRoll('Grit · Forced march', 6);
+        const r = await gritRoll('Grit · Forced march', 6, QuilSave.overloaded() ? [{ label: 'Over-encumbered', value: -2 }] : []);
         const ok = OK(r), s = S(); s.flags.m2Prep.march = ok;
         if (!ok) hurt(2); save();
         G().beat('scene.camp', `<p class="beat-narr dark">${ok
@@ -141,7 +141,8 @@ window.QuilM2 = (() => {
   function equip(id) {
     const inv = S().inventory;
     [inv.mainHand, 'woodsman_axe'].forEach(w => { if (w && w !== id && !inv.pack.includes(w)) inv.pack.push(w); });
-    inv.pack = inv.pack.filter(w => w !== id); inv.mainHand = id; save();
+    const wasOver = QuilSave.overloaded();
+    inv.pack = inv.pack.filter(w => w !== id); inv.mainHand = id; save(); G().warnIfOver(wasOver);
   }
 
   /* ---- bonus cache under the hollow stump ---- */
@@ -149,8 +150,10 @@ window.QuilM2 = (() => {
     stage('cache');
     const s = S();
     if (s.flags.m2Cache) return cage();
-    const take = (txt, card) => {
+    const take = async (txt, card) => {
       const c = D().cache, st = S(); st.flags.m2Cache = true;
+      const addLb = txt ? c.items.reduce((a, k) => a + QuilSave.itemWt(k), 0) + Object.values(c.arrows).reduce((a, v) => a + v * QuilSave.WT.arrow, 0) : 0;
+      if (txt && !(await G().overflowPrompt(addLb, 'The stump cache'))) { st.hero.gold += c.gold; txt = 'You pocket the silver and leave the rest in the stump. Your pack is heavy enough.'; save(); return G().beat('scene.charcoal_track', `<p class="beat-narr dark">${txt}</p>${card}`, [{ label: 'The wolf pen', fn: cage }]); }
       if (txt) { st.hero.gold += c.gold; c.items.forEach(k => st.items[k] = (st.items[k] || 0) + 1);
         Object.entries(c.arrows).forEach(([k, v]) => st.inventory.quiver[k] = (st.inventory.quiver[k] || 0) + v); }
       save();

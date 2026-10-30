@@ -44,6 +44,28 @@ window.QuilSave = (() => {
     return 20 + 5 * h.grit + 4 * (h.level - 1);
   }
 
+  /* ---- Weight & encumbrance (lb). Gold and jewels are weightless. Load is always computed from inventory, so old saves need no migration. ---- */
+  const WT = {
+    weapons: { tomas_hatchet: 3, hunting_bow: 3, short_sword: 4, spear: 6, skinning_knife: 1, woodsman_axe: 7, goblin_shiv: 1, goblin_shortbow: 2, wolf_fangs: 0.5 },
+    arrow: 0.1,
+    items: { minor_potion: 0.5, potion: 1, bandage: 0.2, rope: 4, ration: 1, torch: 1 },
+  };
+  const r1 = n => Math.round(n * 10) / 10;
+  const weaponWt = id => id ? (WT.weapons[id] ?? 3) : 0;
+  const itemWt = k => WT.items[k] ?? 1;
+  function capacity(st) { st = st || state; return 30 + 5 * (st?.hero?.might || 0); }
+  function load_(st) {
+    st = st || state; if (!st) return 0; const inv = st.inventory || {};
+    let w = weaponWt(inv.mainHand) + weaponWt(inv.offHand) + weaponWt(inv.bow);
+    (inv.pack || []).forEach(id => { w += weaponWt(id); });
+    Object.values(inv.quiver || {}).forEach(n => { w += (n || 0) * WT.arrow; });
+    Object.entries(st.items || {}).forEach(([k, n]) => { w += (n || 0) * itemWt(k); });
+    return r1(w);
+  }
+  const overloaded = st => load_(st) > capacity(st);
+  const encMods = () => overloaded() ? [{ label: 'Over-encumbered', value: -1 }] : [];
+  const fmtLb = n => `${r1(n)} lb`;
+
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
@@ -96,5 +118,5 @@ window.QuilSave = (() => {
     if (document.visibilityState === 'hidden') save();
   });
 
-  return { load, get, set, save, newGame, hasSave, clear, defaultState, calcMaxHp, KEY };
+  return { WT, weaponWt, itemWt, capacity, carried: load_, overloaded, encMods, fmtLb, load, get, set, save, newGame, hasSave, clear, defaultState, calcMaxHp, KEY };
 })();
