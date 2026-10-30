@@ -25,7 +25,7 @@ window.QuilCombat = (() => {
         engaged: false,
         ranged: proto.traits.includes('ranged'),
         pos: (m.map.pos[e.id] || [0, 0]).slice(0, 2), facing: (m.map.pos[e.id] || [])[2] || 'W', aware: 'unaware', unseen: false,
-        patrol: (m.map.patrol || {})[e.id] || null, pi: 0, pdir: 1,
+        asleep: ((m.map.asleep || []).includes(e.id)), patrol: (m.map.patrol || {})[e.id] || null, pi: 0, pdir: 1,
         fast: proto.traits.includes('fast'), nose: proto.traits.includes('nose'), charge: proto.traits.includes('charge'), mounted: proto.traits.includes('mounted'), beast: proto.traits.includes('beast'), token: proto.token || null,
       };
   }
@@ -80,6 +80,7 @@ window.QuilCombat = (() => {
   }
   /* Line of sight: in range (5, archer on the beam 7), inside the facing cone (120°, beam 220°), no building between */
   function canSee(e, cell) {
+    if (e.asleep) return false;
     const d = dist(e.pos, cell);
     if (d < 0.1) return true;
     const high = terrainAt(...e.pos)?.type === 'beam';
@@ -100,10 +101,14 @@ window.QuilCombat = (() => {
   }
   /* Keen nose: wolves (and the wolf-rider's mount) are +2 to notice a Quil within 3 squares, sight or no sight */
   /* M2: charcoal smoke hangs over the waystation; goblin eyes are worse in it (noses are not) */
-  const percOf = e => (e.percep || 0) - (e.nose ? 0 : (M().smoke || 0)) + (e.nose && battle && dist(e.pos, battle.quil) <= 3 ? 2 : 0);
+  /* Wind (M2): map.wind is where it blows FROM. Quil is downwind of a nose when he stands on the lee side; his scent never reaches it */
+  const WINDV = { E: [1, 0], W: [-1, 0], N: [0, -1], S: [0, 1] };
+  const downwind = e => { const w = WINDV[M().wind]; if (!w || !battle) return false; return (battle.quil[0] - e.pos[0]) * w[0] + (battle.quil[1] - e.pos[1]) * w[1] < 0; };
+  const sniffs = e => e.nose && battle && !downwind(e) && dist(e.pos, battle.quil) <= 3;
+  const percOf = e => (e.percep || 0) - (e.nose ? 0 : (M().smoke || 0)) + (sniffs(e) ? 2 : 0);
   const pAlert = (e, at, noise) => { const b = noticeBonus(e, at, noise); return b === null ? 0 : pAtLeast(TUNE.alertAt - b); };
   /* Tension: after the first body drops, every unalerted goblin is +1 to notice, +1 per fallen, max +3 */
-  const tension = () => Math.min(3, battle.enemies.filter(e => e.dead || e.ko).length);
+  const tension = () => Math.min(M().tensionCap ?? 3, battle.enemies.filter(e => e.dead || e.ko).length);
   /* Horn / whistle: everyone within 6 squares becomes suspicious (a suspicious one becomes alerted) */
   function soundHorn(src, why) {
     const hit = living().filter(e => e !== src && dist(e.pos, src.pos) <= 6);
@@ -116,7 +121,7 @@ window.QuilCombat = (() => {
   function setAware(e, lvl, quietly) {
     const order = { unaware: 0, suspicious: 1, alerted: 2 };
     if (order[lvl] <= order[e.aware]) return;
-    e.aware = lvl; e.unseen = false;
+    e.aware = lvl; e.unseen = false; e.asleep = false;
     if (lvl === 'suspicious') e.facing = faceTo(e.pos, battle.quil);
     if (lvl === 'alerted') { e.facing = faceTo(e.pos, battle.quil); if (e.horn && !e._horned && !quietly) { e._horned = true; battle._pendingHorn = e; } }
   }
@@ -127,6 +132,10 @@ window.QuilCombat = (() => {
     battle._victimDown = !!(exclude && (exclude.dead || exclude.ko)); // the body just dropped doesn't add tension to its own witnesses
     living().forEach(e => {
       if (e === exclude || e.aware === 'alerted') return;
+      if (e.asleep) { // sleepers ignore quiet work; anything loud within 2 squares wakes them
+        if (noise !== 'quiet' && dist(e.pos, at) <= 2) { setAware(e, 'suspicious'); res.push(`${e.name} wakes → suspicious`); }
+        return;
+      }
       const b = noticeBonus(e, at, noise);
       if (b === null) return;
       const r = roll2d6z(), tot = r.n + b;
@@ -196,7 +205,7 @@ window.QuilCombat = (() => {
       const v2 = MID === 2 && e.uid.endsWith('2') ? '2' : ''; // M2 mixes the new sculpts in
       const img = e.dead ? TOK.dead : e.ko ? TOK.ko : e.token ? TOK[e.token] : e.ranged ? TOK['archer' + v2] : e.type === 'goblin_brute' ? (TOK.brute || TOK.troll) : TOK['cutter' + (MID === 2 && /[246]$/.test(e.uid) ? '2' : '')];
       const ring = down ? 'r-down' : 'r-' + e.aware;
-      const mark = down ? '' : e.aware === 'alerted' ? '❗' : e.aware === 'suspicious' ? '❓' : '💤';
+      const mark = down ? '' : e.aware === 'alerted' ? '❗' : e.aware === 'suspicious' ? '❓' : e.asleep ? '😴' : '💤';
       const pa = sel && !down && e !== sel && e.aware !== 'alerted' ? Math.round(pAlert(e, sel.pos, 'loud') * 100) : 0;
       const lab = e.type === 'wolf' ? 'Wf' : e.type === 'wolf_rider' ? (e.mounted ? 'WR' : 'R') : e.ranged ? 'A' + (MID === 2 ? e.uid.slice(-1) : '') : e.type === 'goblin_brute' ? 'B' : e.name.replace(/\D/g, '') || 'G';
       const pips = down ? '' : `<g class="pips">${Array.from({ length: e.maxHp }, (_, i) => `<rect x="${cx - e.maxHp * Math.min(10, 100 / e.maxHp) / 2 + i * Math.min(10, 100 / e.maxHp)}" y="${cy + S * 0.5}" width="${Math.min(10, 100 / e.maxHp) - 2}" height="8" class="${i < e.hp ? 'pip-on' : 'pip-off'}"/>`).join('')}</g>`;
@@ -257,7 +266,7 @@ window.QuilCombat = (() => {
     let fm = document.getElementById('tac-full');
     if (!fm) {
       fm = document.createElement('div'); fm.id = 'tac-full';
-      fm.innerHTML = `<div class="tf-top"><span class="cinzel">${M().title || 'Hollowmere Square'}</span><span><button class="tac-btn" data-z="-1">−</button><button class="tac-btn" data-z="1">+</button><button class="vw-close" id="tf-close">✕</button></span></div>
+      fm.innerHTML = `<div class="tf-top"><span class="cinzel">${M().title || 'Hollowmere Square'}${M().wind ? ` <small class="wind">🌬 wind from the ${({ E: 'east', W: 'west', N: 'north', S: 'south' })[M().wind]}</small>` : ''}</span><span><button class="tac-btn" data-z="-1">−</button><button class="tac-btn" data-z="1">+</button><button class="vw-close" id="tf-close">✕</button></span></div>
         <div class="tf-scroll"><div class="tf-stage"></div></div><div class="tf-hint">Tap a goblin to target it, or tap the ground to identify terrain. Use + and − to zoom, then drag to pan.</div>`;
       document.getElementById('app').appendChild(fm);
       fm.querySelector('#tf-close').onclick = () => fm.remove();
@@ -357,7 +366,7 @@ window.QuilCombat = (() => {
       if (e.burn) status.push(`Burn ${e.burn}`);
       if (e.stun) status.push(`Stun ${e.stun}`);
       if (e.engaged) status.push('Melee');
-      if (!e.dead && !e.ko) status.push(e.aware === 'alerted' ? '❗ Alerted' : e.aware === 'suspicious' ? '❓ Suspicious' : '💤 Unaware');
+      if (!e.dead && !e.ko) status.push(e.aware === 'alerted' ? '❗ Alerted' : e.aware === 'suspicious' ? '❓ Suspicious' : e.asleep ? '😴 Asleep' : '💤 Unaware');
       card.innerHTML = `
         <div class="enemy-art" data-art="${e.artId}"></div>
         <div class="enemy-info">
@@ -426,9 +435,11 @@ window.QuilCombat = (() => {
   }
   function stealthTarget(t) {
     if (!t) return 6;
-    const crowded = living().some(o => o !== t && dist(o.pos, t.pos) <= 1.5);
+    const crowded = living().some(o => o !== t && !o.asleep && dist(o.pos, t.pos) <= 1.5);
     // Edge vs 7 · +2 suspicious · +2 next to another goblin · −2 from behind (it can't see you) · −2 after a Whistler
-    return 7 + (t.aware === 'suspicious' ? 2 : 0) + (crowded ? 2 : 0) - (seesQuil(t) ? 0 : 2) - (battle._sneakBonus ? 2 : 0);
+    // Asleep −2 · a keen nose only gives −1 from behind or downwind (0 otherwise)
+    const behind = t.nose ? (!seesQuil(t) || downwind(t) ? 1 : 0) : (seesQuil(t) ? 0 : 2);
+    return 7 + (t.aware === 'suspicious' ? 2 : 0) + (crowded ? 2 : 0) - behind - (t.asleep ? 2 : 0) - (M().smokeSneak || 0) - (battle._sneakBonus ? 2 : 0);
   }
 
   function selectedEnemy() {
@@ -897,7 +908,7 @@ window.QuilCombat = (() => {
   async function enemyTurn() {
     const foes = living();
     // Patrols: unaware goblins walk 1 square along their route and turn at the ends
-    foes.filter(e => e.aware === 'unaware' && e.patrol && e.patrol.length > 1).forEach(e => {
+    foes.filter(e => e.aware === 'unaware' && !e.asleep && e.patrol && e.patrol.length > 1).forEach(e => {
       let ni = e.pi + e.pdir;
       if (ni < 0 || ni >= e.patrol.length) { e.pdir *= -1; ni = e.pi + e.pdir; }
       const nx = e.patrol[ni];
@@ -923,10 +934,10 @@ window.QuilCombat = (() => {
     // Searchers: suspicious goblins turn toward Quil and look (quiet check, only if they can see him)
     foes.filter(e => e.aware === 'suspicious').forEach(e => {
       e.facing = faceTo(e.pos, battle.quil);
-      const sniff = e.nose && dist(e.pos, battle.quil) <= 3;
+      const sniff = sniffs(e);
       if (!seesQuil(e) && !sniff) return;
       if (sniff && !seesQuil(e)) log(`${e.name} has your scent`, '', QuilNarrate.pick('wolf_sniff', { e: e.name }));
-      const r = roll2d6z(), b = 2 + 2 + percOf(e) + tension() - Math.floor(dist(e.pos, battle.quil) / TUNE.distDiv), tot = r.n + b;
+      const r = roll2d6z(), b = 2 + 2 - (e.nose ? 0 : (M().smoke || 0)) + percOf(e) + tension() - Math.floor(dist(e.pos, battle.quil) / TUNE.distDiv), tot = r.n + b;
       if (tot >= TUNE.alertAt) { setAware(e, 'alerted'); log(`${e.name} searches · ${r.a}+${r.b}+${b}=${tot} → alerted`, 'fail', `${e.name} squints into the smoke, and finds you.`); }
       else log(`${e.name} searches · ${r.a}+${r.b}+${b}=${tot} · nothing`, '');
     });

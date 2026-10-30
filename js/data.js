@@ -137,7 +137,7 @@ window.QuilData = {
     alertness: 6,
     map: {
       // 9×6 grid over battlemap_m2 (1024×576)
-      cols: 9, rows: 6, art: 'assets/art/battlemap_m2.webp', title: 'The Charcoal Track Waystation', ground: 'Packed earth & ash', smoke: 2,
+      cols: 9, rows: 6, art: 'assets/art/battlemap_m2.webp', title: 'The Charcoal Track Waystation', ground: 'Packed earth & ash', smoke: 2, smokeSneak: 1, tensionCap: 1, wind: 'E', asleep: ['gc2', 'gc3'],
       quil: [2, 5], quilCover: [1, 5],
       terrain: [
         { type: 'building', label: 'Hide tent (north-west)', cells: [[1, 1], [2, 0], [2, 1]] },

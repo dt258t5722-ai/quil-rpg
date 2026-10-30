@@ -638,6 +638,7 @@ button { font-family: inherit; cursor: pointer; }
 #tac-full { position: absolute; inset: 0; z-index: 170; background: #050403; display: flex; flex-direction: column; padding-top: var(--safe-top); padding-bottom: var(--safe-bot); }
 .tf-top { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; color: var(--gold); }
 .tf-top .tac-btn { margin-right: 6px; width: 40px; font-size: 18px; }
+.tf-top .wind { display: block; font-family: system-ui, sans-serif; font-size: 11px; color: #cfd8dc; opacity: .85; }
 .tf-scroll { flex: 1; overflow: auto; display: flex; align-items: center; -webkit-overflow-scrolling: touch; }
 .tf-stage { min-width: 100%; } .tf-stage .tac-svg { display: block; }
 .tf-hint { color: #8a7a60; font-size: 13px; text-align: center; padding: 8px 14px 12px; }
