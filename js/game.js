@@ -587,21 +587,20 @@ window.QuilGame = (() => {
         <div class="slot-card"><div class="lab">Armour</div><div class="item">${inv.armour || 'None'}</div></div>
         <div class="slot-card"><span class="thumb" data-art="item.arrows"></span><div class="lab">Quiver</div><div class="item">${Object.entries(inv.quiver).filter(([,n])=>n>0).map(([k,n])=>`${k}×${n}`).join(', ')||'empty'}</div></div>
       </div>
-      <h3 class="cinzel" style="color:var(--gold);font-size:14px">Supplies</h3>
-      <div class="supplies">${Object.entries(s.items || {}).map(([k, n]) => `<span class="tag">${QuilExtras.ITEM[k]?.icon || ''} ${QuilExtras.ITEM[k]?.name || k} ×${n}</span>`).join('')}</div>
       <h3 class="cinzel" style="color:var(--gold);font-size:14px">Pack</h3>
       <div class="pack-grid" id="pack-grid"></div>`;
     mountThumbs($('pack-root'));
     const grid = $('pack-grid');
-    const slots = 12;
+    const entries = inv.pack.map(item => {
+      const wd = QuilData.weapons[item];
+      return `<div class="ico">${wd?.type === 'bow' ? '🏹' : '⚔️'}</div>${wd?.name || item}`;
+    }).concat(Object.entries(s.items || {}).filter(([, n]) => n > 0).map(([k, n]) =>
+      `<div class="ico">${QuilExtras.ITEM[k]?.icon || '🎒'}</div>${QuilExtras.ITEM[k]?.name || k} ×${n}`));
+    const slots = Math.max(12, Math.ceil(entries.length / 4) * 4);
     for (let i = 0; i < slots; i++) {
       const cell = document.createElement('div');
       cell.className = 'pack-cell';
-      const item = inv.pack[i];
-      if (item) {
-        const wd = QuilData.weapons[item];
-        cell.innerHTML = `<div class="ico">${wd?.type === 'bow' ? '🏹' : '⚔️'}</div>${wd?.name || item}`;
-      } else cell.innerHTML = `<div class="ico">·</div>`;
+      cell.innerHTML = entries[i] || `<div class="ico">·</div>`;
       grid.appendChild(cell);
     }
   }
