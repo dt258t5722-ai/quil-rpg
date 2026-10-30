@@ -22,7 +22,7 @@ window.QuilM2 = (() => {
   }
   function start() {
     const s = S(); QuilEnsure(s);
-    s.flags.m2Stage = 'brief'; s.flags.m2Prep = {}; s.flags.m2Looted = false; s.flags.m2Cache = false; save();
+    s.flags.m2Stage = 'brief'; s.flags.m2Prep = {}; s.flags.m2Looted = false; s.flags.m2Cache = false; s.flags.m2Wind = ['N', 'E', 'S', 'W'][Math.floor(Math.random() * 4)]; save();
     brief();
   }
   function resume() {
@@ -79,7 +79,7 @@ window.QuilM2 = (() => {
 
   /* ---- travel check 3: forced march (Grit 6, fail −2 HP at fight start) ---- */
   function march() {
-    G().beat('scene.camp', `<p>Smoke on the wind: the waystation is close, but the rear guard will move at first light. No camp tonight. You walk on blistered feet through the dark.</p>`, [
+    G().beat('scene.camp', `<p>Smoke on the ${({ N: 'north', E: 'east', S: 'south', W: 'west' })[S().flags.m2Wind] || 'east'} wind: the waystation is close, but the rear guard will move at first light. No camp tonight. You walk on blistered feet through the dark.</p>`, [
       { label: 'March through the night  [Grit vs 6]', fn: async () => {
         const r = await gritRoll('Grit · Forced march', 6);
         const ok = OK(r), s = S(); s.flags.m2Prep.march = ok;

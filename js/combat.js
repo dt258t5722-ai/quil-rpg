@@ -103,7 +103,13 @@ window.QuilCombat = (() => {
   /* M2: charcoal smoke hangs over the waystation; goblin eyes are worse in it (noses are not) */
   /* Wind (M2): map.wind is where it blows FROM. Quil is downwind of a nose when he stands on the lee side; his scent never reaches it */
   const WINDV = { E: [1, 0], W: [-1, 0], N: [0, -1], S: [0, 1] };
-  const downwind = e => { const w = WINDV[M().wind]; if (!w || !battle) return false; return (battle.quil[0] - e.pos[0]) * w[0] + (battle.quil[1] - e.pos[1]) * w[1] < 0; };
+  const WINDN = { E: 'east', W: 'west', N: 'north', S: 'south' };
+  const WINDA = { E: '←', W: '→', N: '↓', S: '↑' }; // arrow shows where the air flows TO
+  const OPP = { E: 'W', W: 'E', N: 'S', S: 'N' };
+  const windDir = () => M().wind ? (window.QuilSave?.get()?.flags?.m2Wind || M().wind) : null;
+  const rollWind = () => { const k = Object.keys(WINDV); return k[Math.floor(Math.random() * k.length)]; };
+  const windBadge = () => { const w = windDir(); return w ? `<div class="wind-badge" title="Wind blows from the ${WINDN[w]}"><span class="wb-arrow">${WINDA[w]}</span><span>Wind: from the ${WINDN[w][0].toUpperCase() + WINDN[w].slice(1)}</span></div>` : ''; };
+  const downwind = e => { const w = WINDV[windDir()]; if (!w || !battle) return false; return (battle.quil[0] - e.pos[0]) * w[0] + (battle.quil[1] - e.pos[1]) * w[1] < 0; };
   const sniffs = e => e.nose && battle && !downwind(e) && dist(e.pos, battle.quil) <= 3;
   const percOf = e => (e.percep || 0) - (e.nose ? 0 : (M().smoke || 0)) + (sniffs(e) ? 2 : 0);
   const pAlert = (e, at, noise) => { const b = noticeBonus(e, at, noise); return b === null ? 0 : pAtLeast(TUNE.alertAt - b); };
@@ -244,7 +250,7 @@ window.QuilCombat = (() => {
   }
   function renderMap() {
     const wrap = document.getElementById('tac-map'); if (!wrap || !battle) return;
-    wrap.innerHTML = mapSVG(false) + `<div class="tac-tools"><button class="tac-btn" id="tac-grid">${mapGrid ? '▦ Grid on' : '▦ Grid'}</button><button class="tac-btn" id="tac-expand">⤢ Expand</button></div>`;
+    wrap.innerHTML = mapSVG(false) + windBadge() + `<div class="tac-tools"><button class="tac-btn" id="tac-grid">${mapGrid ? '▦ Grid on' : '▦ Grid'}</button><button class="tac-btn" id="tac-expand">⤢ Expand</button></div>`;
     bindMap(wrap);
     wrap.querySelector('#tac-grid').onclick = () => { mapGrid = !mapGrid; renderMap(); };
     wrap.querySelector('#tac-expand').onclick = () => openFullMap();
@@ -266,7 +272,7 @@ window.QuilCombat = (() => {
     let fm = document.getElementById('tac-full');
     if (!fm) {
       fm = document.createElement('div'); fm.id = 'tac-full';
-      fm.innerHTML = `<div class="tf-top"><span class="cinzel">${M().title || 'Hollowmere Square'}${M().wind ? ` <small class="wind">🌬 wind from the ${({ E: 'east', W: 'west', N: 'north', S: 'south' })[M().wind]}</small>` : ''}</span><span><button class="tac-btn" data-z="-1">−</button><button class="tac-btn" data-z="1">+</button><button class="vw-close" id="tf-close">✕</button></span></div>
+      fm.innerHTML = `<div class="tf-top"><span class="cinzel">${M().title || 'Hollowmere Square'}${windDir() ? ` <small class="wind">🌬 wind from the ${WINDN[windDir()]}</small>` : ''}</span><span><button class="tac-btn" data-z="-1">−</button><button class="tac-btn" data-z="1">+</button><button class="vw-close" id="tf-close">✕</button></span></div>
         <div class="tf-scroll"><div class="tf-stage"></div></div><div class="tf-hint">Tap a goblin to target it, or tap the ground to identify terrain. Use + and − to zoom, then drag to pan.</div>`;
       document.getElementById('app').appendChild(fm);
       fm.querySelector('#tf-close').onclick = () => fm.remove();
@@ -518,7 +524,7 @@ window.QuilCombat = (() => {
       if (act === 'watch') {
         if ((battle._watched || 0) >= 3) return toast('Waiting any longer would be a risk');
         battle._watched = (battle._watched || 0) + 1;
-        log('Wait and watch', '', MID === 2 ? 'You lie flat in the bracken at the forest edge and count them: the platforms, the fire, the wolf that lifts its head and tastes the wind.' : 'You crouch in the smoke at the edge of the square and watch the goblins walk their loot-rounds.');
+        log('Wait and watch', '', MID === 2 ? `You lie flat in the bracken at the forest edge and count them: the platforms, the fire, the wolf that lifts its head and tastes the ${WINDN[windDir()] || 'east'} wind.` : 'You crouch in the smoke at the edge of the square and watch the goblins walk their loot-rounds.');
         battle.phase = 'enemy'; await enemyTurn();
         if (battle.phase === 'player' && !anyAlerted()) battle.phase = 'approach';
         renderAll(); return;
@@ -1047,13 +1053,14 @@ window.QuilCombat = (() => {
   function start(cb, missionId) {
     onEnd = cb;
     battle = spawnMission(missionId || 1);
+    if (M().wind) { const f = QuilSave.get().flags; if (!WINDV[f.m2Wind]) f.m2Wind = rollWind(); }
     // Seed fallen weapons empty; engage none yet
     document.getElementById('screen-combat').classList.add('active');
     hideOthers('screen-combat');
     document.getElementById('bottom-nav').classList.remove('visible');
     QuilArt.mount(document.querySelector('#combat-scene-art'), MID === 2 ? 'scene.charcoal_track' : 'scene.town_square');
     if (MID === 2) window.QuilExtras?.unlock?.('map.battle_m2');
-    log('Choose your opener: Open Assault, Melee Stealth or Ranged Stealth', '', QuilNarrate.pick(MID === 2 ? 'intro_m2' : 'intro'));
+    log('Choose your opener: Open Assault, Melee Stealth or Ranged Stealth', '', QuilNarrate.pick(MID === 2 ? 'intro_m2' : 'intro') + (windDir() ? ` The wind comes out of the ${WINDN[windDir()]} tonight, carrying the campfire smoke ${WINDN[OPP[windDir()]]}. Keep to the ${WINDN[OPP[windDir()]]} side of the wolf and its rider and they will never smell you.` : ''));
     battle.selected = 'gc1';
     renderAll();
     QuilSave.save();
